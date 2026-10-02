@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import {
-  BookMarked,
   ClipboardCheck,
   House,
   LibraryBig,
@@ -14,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { roleLabels } from '@yys/shared';
+import schoolLogo from '../assets/sysu-logo.png';
 import {
   Badge,
   IconButton,
@@ -88,15 +88,15 @@ export function Sidebar() {
       </div>
 
       <div className="px-4 pb-4">
-        <div className="flex items-center gap-2">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-accent text-accent-fg">
-            <BookMarked className="size-4" />
-          </span>
-          <div>
-            <p className="text-[15px] leading-tight font-semibold">一页书展</p>
-            <p className="text-[11px] text-subtle">AI 策展与运营智能体</p>
-          </div>
-        </div>
+        {/* 校徽为深绿色，深色模式下垫浅色底保证对比度 */}
+        <img
+          src={schoolLogo}
+          alt="中山大学"
+          draggable={false}
+          className="h-9 w-auto select-none dark:rounded-md dark:bg-white dark:px-1.5 dark:py-1"
+        />
+        <p className="mt-3 text-[15px] leading-tight font-semibold">一页书展</p>
+        <p className="text-[11px] text-subtle">AI 策展与运营智能体</p>
       </div>
 
       <nav className="space-y-0.5 px-2">
