@@ -1,6 +1,12 @@
-import { MessageChannelMain, utilityProcess, type UtilityProcess, type WebContents } from 'electron';
+import {
+  app,
+  MessageChannelMain,
+  utilityProcess,
+  type UtilityProcess,
+  type WebContents,
+} from 'electron';
 import log from 'electron-log/main';
-import { ipcChannels, type CoreStatus, type CoreToMain, type MainToCore } from '@yys/shared';
+import { ipcChannels, type CoreStatus, type CoreToMain, type MainToCore } from '@yys/shared/ipc';
 import coreEntry from '../core/index?modulePath';
 import type { SecretVault } from './secrets';
 
@@ -24,15 +30,14 @@ export class CoreHost {
 
   start(): void {
     this.ready = false;
-    const child = utilityProcess.fork(coreEntry, [], {
-      serviceName: 'YiyeShuzhan Core',
-      stdio: 'pipe',
-      env: {
-        ...process.env,
-        YYS_DATA_DIR: this.options.dataDir,
-        YYS_APP_VERSION: this.options.appVersion,
-      },
-    });
+    // utilityProcess 只接受字符串环境变量，值为 undefined 会导致启动失败
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) if (typeof value === 'string') env[key] = value;
+    // 测试用的脚本化模型只允许在未打包的开发构建中启用
+    if (app.isPackaged) delete env.YYS_E2E_SCRIPTED_MODEL;
+    env.YYS_DATA_DIR = this.options.dataDir;
+    env.YYS_APP_VERSION = this.options.appVersion;
+    const child = utilityProcess.fork(coreEntry, [], { serviceName: 'YiyeShuzhan Core', stdio: 'pipe', env });
     this.child = child;
 
     child.stdout?.on('data', (chunk: Buffer) => log.info(`[core] ${chunk.toString().trimEnd()}`));
@@ -73,7 +78,11 @@ export class CoreHost {
         for (const client of this.clients) this.sendPort(client);
         break;
       case 'secret:get': {
-        const reply: MainToCore = { type: 'secret:result', id: message.id, value: this.options.vault.get(message.ref) };
+        const reply: MainToCore = {
+          type: 'secret:result',
+          id: message.id,
+          value: this.options.vault.get(message.ref),
+        };
         child.postMessage(reply);
         break;
       }
@@ -98,15 +107,21 @@ export class CoreHost {
     const now = Date.now();
     this.restarts = this.restarts.filter((t) => now - t < RESTART_WINDOW_MS);
     if (this.restarts.length >= MAX_RESTARTS) {
-      this.setStatus({ state: 'failed', reason: `${reason}；短时间内多次重启失败，请重新打开应用或导出诊断日志` });
+      this.setStatus({
+        state: 'failed',
+        reason: `${reason}；短时间内多次重启失败，请重新打开应用或导出诊断日志`,
+      });
       return;
     }
     this.restarts.push(now);
     const attempt = this.restarts.length;
     this.setStatus({ state: 'restarting', attempt, reason });
-    setTimeout(() => {
-      if (!this.stopping) this.start();
-    }, 500 * 2 ** (attempt - 1));
+    setTimeout(
+      () => {
+        if (!this.stopping) this.start();
+      },
+      500 * 2 ** (attempt - 1),
+    );
   }
 
   private setStatus(status: CoreStatus): void {

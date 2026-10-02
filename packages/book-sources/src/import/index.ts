@@ -30,13 +30,16 @@ export interface ParsedImport {
 }
 
 export async function parseTable(
-  input: { bytes: Uint8Array; format: ImportFormat } | { text: string; format: Exclude<ImportFormat, 'xlsx'> },
+  input:
+    | { bytes: Uint8Array; format: ImportFormat }
+    | { text: string; format: Exclude<ImportFormat, 'xlsx'> },
 ): Promise<{ table: RawTable; encoding?: string }> {
   if (input.format === 'xlsx') {
     if (!('bytes' in input)) throw new AppError('invalid_params', 'Excel 导入需要文件内容');
     return { table: await parseXlsx(input.bytes) };
   }
-  const decoded = 'bytes' in input ? decodeText(input.bytes) : { text: input.text, encoding: undefined };
+  const decoded =
+    'bytes' in input ? decodeText(input.bytes) : { text: input.text, encoding: undefined };
   const { text } = decoded;
   switch (input.format) {
     case 'csv':
@@ -56,7 +59,10 @@ const LINK_HEADER = '__cellLink';
  * Excel 超链接：来源链接列的单元格若是"查看"之类的文字，用其超链接替换；
  * 没有来源链接列时，取书名单元格（或该行第一个）的超链接。
  */
-function applyCellLinks(table: RawTable, mapping: Partial<Record<BookFieldKey, string>>): Record<string, string>[] {
+function applyCellLinks(
+  table: RawTable,
+  mapping: Partial<Record<BookFieldKey, string>>,
+): Record<string, string>[] {
   const { links } = table;
   if (!links?.some((row) => Object.keys(row).length > 0)) return table.rows;
   const urlHeader = mapping.sourceUrl;
@@ -74,7 +80,9 @@ function applyCellLinks(table: RawTable, mapping: Partial<Record<BookFieldKey, s
 
 /** 解析 → 自动映射表头 → 规范化与同批去重。不触碰存储。 */
 export async function parseImport(
-  input: { bytes: Uint8Array; fileName: string } | { text: string; format: Exclude<ImportFormat, 'xlsx'> },
+  input:
+    | { bytes: Uint8Array; fileName: string }
+    | { text: string; format: Exclude<ImportFormat, 'xlsx'> },
   at: string,
 ): Promise<ParsedImport> {
   let format: ImportFormat;
@@ -97,7 +105,11 @@ export async function parseImport(
 
   const { table } = parsed;
   if (table.rows.length === 0) {
-    throw new AppError('import_failed', '文件中没有可导入的数据行', '请确认第一行是表头，后面每行一本书');
+    throw new AppError(
+      'import_failed',
+      '文件中没有可导入的数据行',
+      '请确认第一行是表头，后面每行一本书',
+    );
   }
   const { mapping, unmappedHeaders } = suggestMapping(table.headers);
   if (!mapping.title) {

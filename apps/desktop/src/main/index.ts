@@ -9,7 +9,10 @@ import { SecretVault } from './secrets';
 import { createMainWindow } from './window';
 
 // 用 ASCII 目录名存放数据，避免个别 Windows 环境下的路径编码问题；E2E 测试通过环境变量隔离数据目录
-app.setPath('userData', process.env.YYS_USER_DATA_DIR || join(app.getPath('appData'), 'YiyeShuzhan'));
+app.setPath(
+  'userData',
+  process.env.YYS_USER_DATA_DIR || join(app.getPath('appData'), 'YiyeShuzhan'),
+);
 const dataDir = app.getPath('userData');
 mkdirSync(dataDir, { recursive: true });
 

@@ -1,4 +1,10 @@
-import { AppError, bookFieldKeys, type BookDraft, type Page, type SchoolProfile } from '@yys/shared';
+import {
+  AppError,
+  bookFieldKeys,
+  type BookDraft,
+  type Page,
+  type SchoolProfile,
+} from '@yys/shared';
 import { normalizeRows } from '../import/normalize';
 import type { BookSearchInput, RemoteBookSource } from '../types';
 
@@ -8,7 +14,11 @@ export function getByPath(value: unknown, path: string): unknown {
   return path
     .split('.')
     .filter(Boolean)
-    .reduce<unknown>((acc, key) => (acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined), value);
+    .reduce<unknown>(
+      (acc, key) =>
+        acc && typeof acc === 'object' ? (acc as Record<string, unknown>)[key] : undefined,
+      value,
+    );
 }
 
 /**
@@ -29,7 +39,10 @@ export class HttpJsonCampusSource implements RemoteBookSource {
     this.name = `${profile.name} 馆藏`;
   }
 
-  async search(input: BookSearchInput, signal?: AbortSignal): Promise<Page<BookDraft & { externalId: string }>> {
+  async search(
+    input: BookSearchInput,
+    signal?: AbortSignal,
+  ): Promise<Page<BookDraft & { externalId: string }>> {
     const api = this.profile.api!;
     const url = new URL(api.searchPath, api.baseUrl);
     url.searchParams.set(api.queryParam, input.text);
@@ -47,7 +60,8 @@ export class HttpJsonCampusSource implements RemoteBookSource {
     const json = (await response.json()) as unknown;
 
     const items = getByPath(json, api.itemsPath);
-    if (!Array.isArray(items)) throw new AppError('import_failed', `学校接口响应中没有找到 ${api.itemsPath} 数组`);
+    if (!Array.isArray(items))
+      throw new AppError('import_failed', `学校接口响应中没有找到 ${api.itemsPath} 数组`);
 
     const fieldMap = api.fieldMap;
     const rows = items.map((item) => {
@@ -56,17 +70,27 @@ export class HttpJsonCampusSource implements RemoteBookSource {
         const path = fieldMap[field];
         if (!path) continue;
         const value = getByPath(item, path);
-        row[field] = Array.isArray(value) ? value.join('；') : value === undefined || value === null ? '' : String(value);
+        row[field] = Array.isArray(value)
+          ? value.join('；')
+          : value === undefined || value === null
+            ? ''
+            : String(value);
       }
       row.__externalId = String(getByPath(item, 'id') ?? '');
       return row;
     });
-    const mapping = Object.fromEntries(bookFieldKeys.filter((field) => fieldMap[field]).map((field) => [field, field]));
+    const mapping = Object.fromEntries(
+      bookFieldKeys.filter((field) => fieldMap[field]).map((field) => [field, field]),
+    );
     const at = new Date().toISOString();
     const results: (BookDraft & { externalId: string })[] = [];
     rows.forEach((row, index) => {
       const [draft] = normalizeRows([row], mapping, { origin: 'api', at }).drafts;
-      if (draft) results.push({ ...draft, externalId: row.__externalId || `${this.id}:${input.offset + index}` });
+      if (draft)
+        results.push({
+          ...draft,
+          externalId: row.__externalId || `${this.id}:${input.offset + index}`,
+        });
     });
     const total = api.totalPath ? Number(getByPath(json, api.totalPath)) : results.length;
 

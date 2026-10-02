@@ -11,7 +11,13 @@ describe('示例书库', () => {
   it('每条记录都符合书目 schema 且标记为示例', () => {
     for (const draft of drafts) {
       expect(draft.isSample).toBe(true);
-      const parsed = bookRecordSchema.safeParse({ ...draft, id: 'x', sourceId: 's', createdAt: at, updatedAt: at });
+      const parsed = bookRecordSchema.safeParse({
+        ...draft,
+        id: 'x',
+        sourceId: 's',
+        createdAt: at,
+        updatedAt: at,
+      });
       expect(parsed.success, draft.title).toBe(true);
     }
   });

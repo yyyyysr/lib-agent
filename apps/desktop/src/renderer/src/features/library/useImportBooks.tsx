@@ -54,7 +54,8 @@ function ImportReportView({ report }: { report: ImportReport }) {
           <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border p-3 text-xs text-muted">
             {report.issues.map((issue, i) => (
               <li key={i} className="flex gap-1.5">
-                <TriangleAlert className="mt-0.5 size-3 shrink-0 text-warning" /> 第 {issue.row} 行：{issue.message}
+                <TriangleAlert className="mt-0.5 size-3 shrink-0 text-warning" /> 第 {issue.row}{' '}
+                行：{issue.message}
               </li>
             ))}
           </ul>
@@ -65,7 +66,12 @@ function ImportReportView({ report }: { report: ImportReport }) {
 }
 
 /** 文件导入与粘贴导入的共用入口，返回需要挂载在页面上的对话框 */
-export function useImportBooks(): { importFromFile: () => Promise<void>; openPaste: () => void; dialogs: ReactNode; busy: boolean } {
+export function useImportBooks(): {
+  importFromFile: () => Promise<void>;
+  openPaste: () => void;
+  dialogs: ReactNode;
+  busy: boolean;
+} {
   const [report, setReport] = useState<ImportReport | null>(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
@@ -93,7 +99,11 @@ export function useImportBooks(): { importFromFile: () => Promise<void>; openPas
   const submitPaste = async (): Promise<void> => {
     setBusy(true);
     try {
-      const result = await core.call('books.importText', { text: pasteText, format: detectPasteFormat(pasteText), sourceName: pasteName || '手动录入' });
+      const result = await core.call('books.importText', {
+        text: pasteText,
+        format: detectPasteFormat(pasteText),
+        sourceName: pasteName || '手动录入',
+      });
       setPasteOpen(false);
       setPasteText('');
       setReport(result);
@@ -129,7 +139,12 @@ export function useImportBooks(): { importFromFile: () => Promise<void>; openPas
             <Button variant="ghost" onClick={() => setPasteOpen(false)}>
               取消
             </Button>
-            <Button variant="primary" loading={busy} disabled={!pasteText.trim()} onClick={() => void submitPaste()}>
+            <Button
+              variant="primary"
+              loading={busy}
+              disabled={!pasteText.trim()}
+              onClick={() => void submitPaste()}
+            >
               导入
             </Button>
           </>
@@ -139,8 +154,20 @@ export function useImportBooks(): { importFromFile: () => Promise<void>; openPas
           <Field label="来源名称">
             <Input value={pasteName} onChange={(e) => setPasteName(e.target.value)} />
           </Field>
-          <Field label="书目内容" hint={pasteText.trim() ? `识别为：${detectPasteFormat(pasteText).toUpperCase()}` : '例：《乡土中国》费孝通　或　书名 / 作者 / 出版社'}>
-            <Textarea rows={10} value={pasteText} onChange={(e) => setPasteText(e.target.value)} className="font-mono text-[13px]" />
+          <Field
+            label="书目内容"
+            hint={
+              pasteText.trim()
+                ? `识别为：${detectPasteFormat(pasteText).toUpperCase()}`
+                : '例：《乡土中国》费孝通　或　书名 / 作者 / 出版社'
+            }
+          >
+            <Textarea
+              rows={10}
+              value={pasteText}
+              onChange={(e) => setPasteText(e.target.value)}
+              className="font-mono text-[13px]"
+            />
           </Field>
         </div>
       </Dialog>

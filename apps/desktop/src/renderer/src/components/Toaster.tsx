@@ -11,13 +11,31 @@ export function Toaster() {
       {toasts.map((t) => {
         const Icon = icons[t.tone];
         return (
-          <div key={t.id} className="pointer-events-auto flex gap-3 rounded-xl border border-border bg-bg p-3.5 shadow-xl">
-            <Icon className={cn('mt-0.5 size-4 shrink-0', t.tone === 'error' ? 'text-danger' : t.tone === 'success' ? 'text-success' : 'text-muted')} />
+          <div
+            key={t.id}
+            className="pointer-events-auto flex gap-3 rounded-xl border border-border bg-bg p-3.5 shadow-xl"
+          >
+            <Icon
+              className={cn(
+                'mt-0.5 size-4 shrink-0',
+                t.tone === 'error'
+                  ? 'text-danger'
+                  : t.tone === 'success'
+                    ? 'text-success'
+                    : 'text-muted',
+              )}
+            />
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-medium">{t.title}</p>
-              {t.description && <p className="mt-0.5 text-xs leading-relaxed text-muted">{t.description}</p>}
+              {t.description && (
+                <p className="mt-0.5 text-xs leading-relaxed text-muted">{t.description}</p>
+              )}
             </div>
-            <button aria-label="关闭" onClick={() => dismiss(t.id)} className="text-subtle hover:text-fg">
+            <button
+              aria-label="关闭"
+              onClick={() => dismiss(t.id)}
+              className="text-subtle hover:text-fg"
+            >
               <X className="size-3.5" />
             </button>
           </div>

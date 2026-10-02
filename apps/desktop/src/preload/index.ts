@@ -1,19 +1,29 @@
 /// <reference lib="dom" />
 import { contextBridge, ipcRenderer } from 'electron';
-import { ipcChannels, type CoreStatus, type DesktopBridge, type ThemeSource } from '@yys/shared/ipc';
+import {
+  ipcChannels,
+  type CoreStatus,
+  type DesktopBridge,
+  type ThemeSource,
+} from '@yys/shared/ipc';
 
 export const CORE_PORT_MESSAGE = 'yys:core-port';
 
 // MessagePort 不能经 contextBridge 传递，只能用 window.postMessage 转交给页面主世界
 ipcRenderer.on(ipcChannels.corePort, (event) => {
-  window.postMessage(CORE_PORT_MESSAGE, window.location.origin === 'null' ? '*' : window.location.origin, event.ports);
+  window.postMessage(
+    CORE_PORT_MESSAGE,
+    window.location.origin === 'null' ? '*' : window.location.origin,
+    event.ports,
+  );
 });
 
 const bridge: DesktopBridge = {
   platform: process.platform as DesktopBridge['platform'],
   requestCorePort: () => ipcRenderer.send(ipcChannels.requestCorePort),
   onCoreStatus: (listener) => {
-    const handler = (_event: Electron.IpcRendererEvent, status: CoreStatus): void => listener(status);
+    const handler = (_event: Electron.IpcRendererEvent, status: CoreStatus): void =>
+      listener(status);
     ipcRenderer.on(ipcChannels.coreStatus, handler);
     return () => ipcRenderer.off(ipcChannels.coreStatus, handler);
   },
@@ -24,6 +34,11 @@ const bridge: DesktopBridge = {
   },
   dialog: {
     openBookFile: () => ipcRenderer.invoke(ipcChannels.openBookFile),
+  },
+  files: {
+    saveText: (defaultName, content) =>
+      ipcRenderer.invoke(ipcChannels.saveText, defaultName, content),
+    savePng: (defaultName, rect) => ipcRenderer.invoke(ipcChannels.savePng, defaultName, rect),
   },
   shell: {
     openExternal: (url) => ipcRenderer.invoke(ipcChannels.openExternal, url),

@@ -23,7 +23,13 @@ const textResult = (text: string): GenerateResult => ({
 });
 
 const apiError = (statusCode: number, responseBody = ''): APICallError =>
-  new APICallError({ message: `HTTP ${statusCode}`, url: 'https://x', requestBodyValues: {}, statusCode, responseBody });
+  new APICallError({
+    message: `HTTP ${statusCode}`,
+    url: 'https://x',
+    requestBodyValues: {},
+    statusCode,
+    responseBody,
+  });
 
 const config = (presetId: string, extra: Partial<ProviderConfig> = {}): ProviderConfig => ({
   id: 'p1',
@@ -33,6 +39,7 @@ const config = (presetId: string, extra: Partial<ProviderConfig> = {}): Provider
   hasKey: true,
   models: [],
   enabled: true,
+  ownerId: null,
   createdAt: '',
   updatedAt: '',
   ...extra,
@@ -52,7 +59,9 @@ describe('resolveProvider', () => {
     expect(() => resolveProvider(config('deepseek'), null)).toThrow(/尚未填写 API Key/);
   });
   it('本地模型不需要 Key，地址去掉末尾斜杠', () => {
-    expect(resolveProvider(config('ollama', { baseURL: 'http://127.0.0.1:11434/v1/' }), null).baseURL).toBe('http://127.0.0.1:11434/v1');
+    expect(
+      resolveProvider(config('ollama', { baseURL: 'http://127.0.0.1:11434/v1/' }), null).baseURL,
+    ).toBe('http://127.0.0.1:11434/v1');
   });
   it('自定义接口必须填写地址', () => {
     expect(() => resolveProvider(config('custom'), 'k')).toThrow(/缺少接口地址/);
@@ -77,7 +86,9 @@ describe('mapProviderError', () => {
   });
 
   it('解开 RetryError 一类的包装错误', () => {
-    const wrapped = Object.assign(new Error('Failed after 3 attempts'), { lastError: apiError(401) });
+    const wrapped = Object.assign(new Error('Failed after 3 attempts'), {
+      lastError: apiError(401),
+    });
     expect(mapProviderError(wrapped).code).toBe('invalid_key');
   });
 });
@@ -85,19 +96,36 @@ describe('mapProviderError', () => {
 describe('listRemoteModels', () => {
   it('OpenAI 兼容接口：过滤非对话模型并排序', async () => {
     const fetch = vi.fn(async () =>
-      Response.json({ data: [{ id: 'qwen-plus' }, { id: 'text-embedding-v3' }, { id: 'deepseek-v3' }, { id: 'qwen-plus' }] }),
+      Response.json({
+        data: [
+          { id: 'qwen-plus' },
+          { id: 'text-embedding-v3' },
+          { id: 'deepseek-v3' },
+          { id: 'qwen-plus' },
+        ],
+      }),
     );
-    const ctx = resolveProvider(config('dashscope'), 'sk-x', fetch as unknown as typeof globalThis.fetch);
+    const ctx = resolveProvider(
+      config('dashscope'),
+      'sk-x',
+      fetch as unknown as typeof globalThis.fetch,
+    );
     expect(await listRemoteModels(ctx)).toEqual([{ id: 'deepseek-v3' }, { id: 'qwen-plus' }]);
     expect(fetch).toHaveBeenCalledWith(
       'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
-      expect.objectContaining({ headers: expect.objectContaining({ authorization: 'Bearer sk-x' }) }),
+      expect.objectContaining({
+        headers: expect.objectContaining({ authorization: 'Bearer sk-x' }),
+      }),
     );
   });
 
   it('接口报错时抛出可映射的 APICallError', async () => {
     const fetch = async () => new Response('unauthorized', { status: 401 });
-    const ctx = resolveProvider(config('moonshot'), 'bad', fetch as unknown as typeof globalThis.fetch);
+    const ctx = resolveProvider(
+      config('moonshot'),
+      'bad',
+      fetch as unknown as typeof globalThis.fetch,
+    );
     const error = await listRemoteModels(ctx).catch((e: unknown) => e);
     expect(mapProviderError(error).code).toBe('invalid_key');
   });
@@ -107,11 +135,19 @@ describe('testConnection', () => {
   it('三项探测全部通过', async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async (options: CallOptions) => {
-        if (options.responseFormat?.type === 'json') return textResult('{"theme":"信息辨别","bookCount":10}');
+        if (options.responseFormat?.type === 'json')
+          return textResult('{"theme":"信息辨别","bookCount":10}');
         if (options.tools?.length) {
           return {
             ...textResult(''),
-            content: [{ type: 'tool-call', toolCallId: 't1', toolName: 'search_library', input: '{"keyword":"批判性思维"}' }],
+            content: [
+              {
+                type: 'tool-call',
+                toolCallId: 't1',
+                toolName: 'search_library',
+                input: '{"keyword":"批判性思维"}',
+              },
+            ],
             finishReason: { unified: 'tool-calls', raw: 'tool_calls' },
           };
         }
@@ -119,7 +155,11 @@ describe('testConnection', () => {
       },
     });
     const result = await testConnection(model);
-    expect(result).toMatchObject({ ok: true, sample: '你好', capabilities: { structuredOutput: 'native', toolCalling: 'yes' } });
+    expect(result).toMatchObject({
+      ok: true,
+      sample: '你好',
+      capabilities: { structuredOutput: 'native', toolCalling: 'yes' },
+    });
   });
 
   it('基础对话失败即判定连接失败，并返回中文错误', async () => {
@@ -141,6 +181,9 @@ describe('testConnection', () => {
       },
     });
     const result = await testConnection(model);
-    expect(result).toMatchObject({ ok: true, capabilities: { structuredOutput: 'none', toolCalling: 'no' } });
+    expect(result).toMatchObject({
+      ok: true,
+      capabilities: { structuredOutput: 'none', toolCalling: 'no' },
+    });
   });
 });

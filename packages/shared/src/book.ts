@@ -81,6 +81,7 @@ export const bookSourceInfoSchema = z.object({
   kind: bookSourceKindSchema,
   name: z.string(),
   bookCount: z.number().int(),
+  createdBy: z.string().optional(),
   createdAt: z.string(),
   /** 文件导入时记录原始文件名与格式 */
   meta: z.record(z.string(), z.unknown()).optional(),
@@ -94,25 +95,6 @@ export const bookQuerySchema = z.object({
   offset: z.number().int().min(0).default(0),
 });
 export type BookQuery = z.input<typeof bookQuerySchema>;
-
-/** search_library 工具返回给模型、同时渲染在界面上的书目摘要 */
-export interface LibraryToolBook {
-  id: string;
-  title: string;
-  authors: string[];
-  callNumber: string | null;
-  subjects: string[];
-  summary: string | null;
-  sourceUrl: string | null;
-  isSample: boolean;
-  /** 缺失字段的中文名 */
-  missingFields: string[];
-}
-
-export interface LibrarySearchOutput {
-  total: number;
-  books: LibraryToolBook[];
-}
 
 export interface Page<T> {
   items: T[];

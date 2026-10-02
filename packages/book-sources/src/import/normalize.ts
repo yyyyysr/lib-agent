@@ -1,4 +1,10 @@
-import { bookFieldKeys, type BookDraft, type BookFieldKey, type FieldOrigin, type ImportIssue } from '@yys/shared';
+import {
+  bookFieldKeys,
+  type BookDraft,
+  type BookFieldKey,
+  type FieldOrigin,
+  type ImportIssue,
+} from '@yys/shared';
 
 const listSplit = /\s*[,，;；、|｜]\s*|\s+\/\s+|\s*／\s*/;
 const roleSuffix = /\s*(等著|等编著|等编|等译|主编|编著|编译|编|著|译|绘|撰)\s*$/;
@@ -19,7 +25,10 @@ export function splitList(value: string): string[] {
 }
 
 export function cleanTitle(value: string): string {
-  return value.trim().replace(/^《(.+)》$/, '$1').replace(/\s+/g, ' ');
+  return value
+    .trim()
+    .replace(/^《(.+)》$/, '$1')
+    .replace(/\s+/g, ' ');
 }
 
 export function parseYear(value: string): number | undefined {
@@ -45,7 +54,8 @@ export function cleanUrl(value: string): { url?: string; valid: boolean } {
   }
 }
 
-const normKey = (value: string): string => value.toLowerCase().replace(/[\s·・.,，:：《》"'“”()（）]/g, '');
+const normKey = (value: string): string =>
+  value.toLowerCase().replace(/[\s·・.,，:：《》"'“”()（）]/g, '');
 
 /** 同批次去重键：优先 ISBN，否则书名 + 第一作者 */
 export function dedupeKey(draft: Pick<BookDraft, 'isbn' | 'title' | 'authors'>): string {
@@ -135,7 +145,8 @@ export function normalizeRows(
     for (const field of bookFieldKeys) {
       const value = draft[field];
       const present = Array.isArray(value) ? value.length > 0 : value !== undefined && value !== '';
-      if (present) draft.provenance[field] = { origin: options.origin, at: options.at, verified: false };
+      if (present)
+        draft.provenance[field] = { origin: options.origin, at: options.at, verified: false };
     }
     drafts.push(draft);
   });

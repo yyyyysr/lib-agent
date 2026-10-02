@@ -8,6 +8,7 @@ export interface ModelOption extends ModelRef {
   providerName: string;
   label: string;
   hasKey: boolean;
+  shared: boolean;
   capabilities?: ModelCapabilities;
 }
 
@@ -29,13 +30,12 @@ export function useModels() {
             providerName: p.displayName,
             label: m.label ?? m.id,
             hasKey: p.hasKey,
+            shared: p.ownerId === null,
             capabilities: m.capabilities,
           })),
         ),
     [providers.data],
   );
-
-  const primary = options.find((o) => sameRef(o, roles.data?.primary)) ?? null;
 
   const setRoles = async (patch: Partial<ModelRoles>): Promise<void> => {
     const current = roles.data ?? { primary: null, fast: null };
@@ -48,10 +48,9 @@ export function useModels() {
 
   return {
     options,
-    primary,
     roles: roles.data,
-    loading: providers.loading || roles.loading,
-    setPrimary: (ref: ModelRef) => setRoles({ primary: { providerId: ref.providerId, modelId: ref.modelId } }),
+    providers: providers.data ?? [],
+    loading: providers.loading,
     setRoles,
   };
 }

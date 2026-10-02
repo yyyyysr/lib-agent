@@ -1,32 +1,30 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { MockLanguageModelV4, convertArrayToReadableStream } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createScriptedModel } from '@yys/agent-core/testing';
 import { openRepositories, type Repositories } from '@yys/db';
-import type { AppErrorShape, WireMessage } from '@yys/shared';
+import type {
+  AgentProgress,
+  AppErrorShape,
+  AuthResult,
+  ExhibitionDetail,
+  ShowcaseExhibition,
+  WireMessage,
+} from '@yys/shared';
+import { AuthService } from './auth';
 import { RpcServer, type PortLike } from './rpc-server';
 import { seedSampleLibrary } from './seed';
-import { createServices } from './services';
+import { createServices } from './services/index';
 
-type StreamResult = Awaited<ReturnType<MockLanguageModelV4['doStream']>>;
-type StreamPart = StreamResult['stream'] extends ReadableStream<infer P> ? P : never;
-
-const usage = {
-  inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
-  outputTokens: { total: 5, text: 5, reasoning: 0 },
-} as Extract<StreamPart, { type: 'finish' }>['usage'];
-
-const streamOf = (parts: StreamPart[]): StreamResult => ({ stream: convertArrayToReadableStream(parts) });
-
-/** 内存中的端口对：模拟 Renderer ↔ Core 的 MessagePort */
+/** 内存中的端口：模拟 Renderer ↔ Core 的 MessagePort */
 function createClient(server: RpcServer) {
-  const serverListeners: ((e: { data: unknown }) => void)[] = [];
+  const listeners: ((e: { data: unknown }) => void)[] = [];
   const inbox: WireMessage[] = [];
   const waiters: (() => void)[] = [];
   const port: PortLike = {
     on: (event: 'message' | 'close', listener: never) => {
-      if (event === 'message') serverListeners.push(listener);
+      if (event === 'message') listeners.push(listener);
       return port;
     },
     postMessage: (message) => {
@@ -37,7 +35,8 @@ function createClient(server: RpcServer) {
   };
   server.attach(port);
   let seq = 0;
-  const send = (message: WireMessage): void => serverListeners.forEach((l) => l({ data: structuredClone(message) }));
+  const send = (message: WireMessage): void =>
+    listeners.forEach((l) => l({ data: structuredClone(message) }));
   const waitFor = async <T extends WireMessage>(match: (m: WireMessage) => m is T): Promise<T> => {
     for (;;) {
       const found = inbox.find(match);
@@ -45,132 +44,414 @@ function createClient(server: RpcServer) {
       await new Promise<void>((resolve) => waiters.push(resolve));
     }
   };
+
+  async function raw(
+    method: string,
+    params: unknown,
+    token?: string,
+  ): Promise<{ result?: unknown; error?: AppErrorShape }> {
+    const id = ++seq;
+    send({ kind: 'req', id, method, params, token });
+    return waitFor(
+      (m): m is Extract<WireMessage, { kind: 'res' }> => m.kind === 'res' && m.id === id,
+    );
+  }
   return {
     inbox,
-    async call(method: string, params?: unknown): Promise<{ result?: unknown; error?: AppErrorShape }> {
-      const id = ++seq;
-      send({ kind: 'req', id, method, params });
-      return waitFor((m): m is Extract<WireMessage, { kind: 'res' }> => m.kind === 'res' && m.id === id);
+    raw,
+    /** 期望成功，否则抛出带错误信息的异常，便于定位 */
+    async call<T = unknown>(method: string, params: unknown, token?: string): Promise<T> {
+      const res = await raw(method, params, token);
+      if (res.error) throw new Error(`${method} 失败：${res.error.code} ${res.error.message}`);
+      return res.result as T;
     },
-    async stream(method: string, params: unknown): Promise<{ chunks: Record<string, unknown>[]; error?: AppErrorShape }> {
+    async stream(
+      method: string,
+      params: unknown,
+      token?: string,
+    ): Promise<{ chunks: AgentProgress[]; error?: AppErrorShape }> {
       const id = ++seq;
-      send({ kind: 'stream', id, method, params });
-      const end = await waitFor((m): m is Extract<WireMessage, { kind: 'end' }> => m.kind === 'end' && m.id === id);
+      send({ kind: 'stream', id, method, params, token });
+      const end = await waitFor(
+        (m): m is Extract<WireMessage, { kind: 'end' }> => m.kind === 'end' && m.id === id,
+      );
       const chunks = inbox
-        .filter((m): m is Extract<WireMessage, { kind: 'chunk' }> => m.kind === 'chunk' && m.id === id)
-        .map((m) => m.chunk as Record<string, unknown>);
+        .filter(
+          (m): m is Extract<WireMessage, { kind: 'chunk' }> => m.kind === 'chunk' && m.id === id,
+        )
+        .map((m) => m.chunk as AgentProgress);
       return { chunks, error: end.error };
     },
   };
 }
 
-describe('Core 服务（经 RPC 调用）', () => {
+const profile = (name: string, no: string) => ({
+  displayName: name,
+  memberNo: no,
+  department: '图书馆',
+});
+const brief = {
+  theme: '新生如何识别 AI 生成的信息',
+  audience: '大一新生',
+  eventDate: '2026-11-15',
+  eventTime: '14:00–15:00',
+  venue: '一楼大厅',
+  bookCount: 8,
+};
+
+describe('Core：登录、权限与书展工作流（经 RPC）', () => {
   let dir: string;
   let repos: Repositories;
-  let vault: Map<string, string>;
-  let model: MockLanguageModelV4;
   let client: ReturnType<typeof createClient>;
+  let admin: AuthResult;
+  let curator: AuthResult;
+  let approver: AuthResult;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'yys-core-'));
     repos = openRepositories(join(dir, 'core.db'));
     seedSampleLibrary(repos);
-    vault = new Map();
-    model = new MockLanguageModelV4();
+    const { model } = createScriptedModel();
+    const vault = new Map<string, string>();
+    const auth = new AuthService(repos);
     let server: RpcServer;
     const { handlers, streams } = createServices({
       repos,
-      secrets: { get: async (ref) => vault.get(ref) ?? null, remove: (ref) => vault.delete(ref) },
+      auth,
+      secrets: {
+        get: async (ref) => vault.get(ref) ?? null,
+        remove: (ref) => void vault.delete(ref),
+      },
       createModel: () => model,
-      emit: (topic, payload) => server.emit(topic, payload as never),
-      info: { version: 'test', dataDir: dir, platform: 'test', nodeVersion: process.versions.node, coreStartedAt: '' },
+      emit: (topic, payload) => server.emit(topic, payload),
+      info: {
+        version: 'test',
+        dataDir: dir,
+        platform: 'test',
+        nodeVersion: process.versions.node,
+        coreStartedAt: '',
+      },
     });
-    server = new RpcServer(handlers, streams, () => {});
+    server = new RpcServer(
+      handlers,
+      streams,
+      (token) => auth.authenticate(token),
+      () => {},
+    );
     client = createClient(server);
+
+    expect(await client.call('auth.status', undefined)).toEqual({ needsSetup: true });
+    admin = await client.call<AuthResult>('auth.register', {
+      ...profile('超管', 'A001'),
+      username: 'admin',
+      password: 'admin-pass-1',
+    });
+    curator = await client.call<AuthResult>('auth.register', {
+      ...profile('李同学', '2024010203'),
+      username: 'curator',
+      password: 'curator-pass',
+    });
+    const reviewer = await client.call<AuthResult>('auth.register', {
+      ...profile('王老师', 'T9001'),
+      username: 'reviewer',
+      password: 'reviewer-pass',
+    });
+    await client.call('users.update', { id: reviewer.user.id, role: 'approver' }, admin.token);
+    approver = await client.call<AuthResult>('auth.login', {
+      username: 'reviewer',
+      password: 'reviewer-pass',
+    });
+
+    // 超级管理员配置一个共享的本地模型，普通用户无需自带 Key
+    await client.call(
+      'providers.save',
+      {
+        presetId: 'ollama',
+        displayName: '共享模型',
+        models: [{ id: 'qwen3' }],
+        enabled: true,
+        shared: true,
+      },
+      admin.token,
+    );
   });
   afterEach(() => {
     repos.db.close();
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('示例书库只灌入一次', () => {
-    expect(seedSampleLibrary(repos)).toBe(false);
-    expect(repos.books.search({}).total).toBe(28);
+  it('首个账号为超级管理员，之后注册为普通用户', () => {
+    expect(admin.user.role).toBe('superadmin');
+    expect(curator.user.role).toBe('user');
+    expect(approver.user.role).toBe('approver');
   });
 
-  it('参数校验失败与未知方法返回结构化错误', async () => {
-    expect((await client.call('books.search', { limit: 9999 })).error?.code).toBe('invalid_params');
-    expect((await client.call('nope.method')).error?.code).toBe('invalid_params');
+  it('权限：未登录、普通用户、审批管理员各自被拒绝的操作', async () => {
+    expect((await client.raw('exhibitions.list', {})).error?.code).toBe('unauthorized');
+    expect((await client.raw('users.list', undefined, curator.token)).error?.code).toBe(
+      'forbidden',
+    );
+    expect((await client.raw('approvals.list', {}, curator.token)).error?.code).toBe('forbidden');
+    expect((await client.raw('users.list', undefined, approver.token)).error?.code).toBe(
+      'forbidden',
+    );
+    expect(
+      (await client.raw('exhibitions.list', { scope: 'all' }, curator.token)).error?.code,
+    ).toBe('forbidden');
+    expect(
+      (
+        await client.raw(
+          'providers.save',
+          { presetId: 'ollama', models: [], enabled: true, shared: true },
+          curator.token,
+        )
+      ).error?.code,
+    ).toBe('forbidden');
+    // 首页对所有人公开
+    expect((await client.raw('showcase.latest', undefined)).error).toBeUndefined();
   });
 
-  it('检索示例书库', async () => {
-    const { result } = await client.call('books.search', { text: '人工智能' });
-    expect((result as { total: number }).total).toBeGreaterThanOrEqual(3);
+  it('登录：错误密码、停用账号、退出后令牌失效', async () => {
+    expect(
+      (await client.raw('auth.login', { username: 'curator', password: 'wrong' })).error?.code,
+    ).toBe('unauthorized');
+    await client.call('auth.logout', undefined, curator.token);
+    expect(await client.call('auth.me', undefined, curator.token)).toBeNull();
+
+    const again = await client.call<AuthResult>('auth.login', {
+      username: 'CURATOR',
+      password: 'curator-pass',
+    });
+    await client.call('users.update', { id: again.user.id, status: 'disabled' }, admin.token);
+    expect(await client.call('auth.me', undefined, again.token)).toBeNull();
+    expect(
+      (await client.raw('auth.login', { username: 'curator', password: 'curator-pass' })).error
+        ?.message,
+    ).toContain('停用');
   });
 
-  it('文件导入生成新的书目来源，示例书库不可删除', async () => {
-    const file = join(dir, '学院资料室.csv');
-    writeFileSync(file, '题名,责任者,索书号\n乡土中国,费孝通,C912/2\n心流,米哈里·契克森米哈赖,B84/62\n');
-    const { result } = await client.call('books.importFile', { path: file });
-    expect(result).toMatchObject({ sourceName: '学院资料室', imported: 2, format: 'csv' });
-    expect((await client.call('books.deleteSource', { id: 'src_sample' })).error?.code).toBe('invalid_params');
+  it('至少保留一名超级管理员', async () => {
+    expect(
+      (await client.raw('users.update', { id: admin.user.id, role: 'user' }, admin.token)).error
+        ?.code,
+    ).toBe('invalid_state');
   });
 
-  it('服务商：保存后按密钥实际存在与否返回 hasKey，删除时清理模型角色与密钥', async () => {
-    const saved = (await client.call('providers.save', { presetId: 'deepseek', displayName: '', models: [{ id: 'deepseek-chat' }], enabled: true }))
-      .result as { id: string; secretRef: string; hasKey: boolean; displayName: string };
-    expect(saved).toMatchObject({ hasKey: false, displayName: 'DeepSeek 深度求索' });
-    vault.set(saved.secretRef, 'sk-test');
-    const list = (await client.call('providers.list')).result as { hasKey: boolean }[];
-    expect(list[0]?.hasKey).toBe(true);
+  it('完整流程：需求 → 策展 → 申请书 → 立项审批（退回再通过）→ 活动包 → 上线审批 → 首页 → 反馈 → 复盘', async () => {
+    const t = curator.token;
+    let detail = await client.call<ExhibitionDetail>('exhibitions.create', brief, t);
+    const id = detail.id;
+    expect(detail.status).toBe('draft');
 
-    await client.call('settings.setModelRoles', { primary: { providerId: saved.id, modelId: 'deepseek-chat' }, fast: null });
-    await client.call('providers.delete', { id: saved.id });
-    expect((await client.call('settings.getModelRoles')).result).toEqual({ primary: null, fast: null });
-    expect(vault.has(saved.secretRef)).toBe(false);
-  });
+    // 策展：进度事件依次到达
+    const run = await client.stream('agent.run', { id, task: 'curate' }, t);
+    expect(run.error).toBeUndefined();
+    expect(
+      run.chunks
+        .filter((c) => c.type === 'stage' && c.status === 'done')
+        .map((c) => (c as { stage: string }).stage),
+    ).toEqual(['pool', 'select', 'structure', 'write', 'check']);
+    expect(run.chunks.at(-1)).toEqual({ type: 'done', status: 'reviewing' });
+    detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    expect(detail.plan?.books).toHaveLength(8);
+    expect(detail.checks.some((c) => c.category === 'sample')).toBe(true);
 
-  it('未配置主模型时对话给出可操作的错误，且用户消息已保存', async () => {
-    const userMessage = { id: 'u1', role: 'user', parts: [{ type: 'text', text: '找几本信息素养的书' }] };
-    const { error } = await client.stream('chat.send', { conversationId: 'c1', messages: [userMessage] });
-    expect(error).toMatchObject({ code: 'no_model', hint: expect.stringContaining('设置') });
-    expect(repos.conversations.get('c1')).toMatchObject({ title: '找几本信息素养的书', messages: [userMessage] });
-  });
+    // 申请书：申请人信息来自账号资料
+    await client.stream('agent.run', { id, task: 'proposal' }, t);
+    detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    expect(detail.status).toBe('proposal_draft');
+    expect(detail.proposal?.applicant).toMatchObject({ name: '李同学', memberNo: '2024010203' });
 
-  it('对话：Agent 调用检索工具后作答，用户消息与回复都落盘', async () => {
-    const saved = (await client.call('providers.save', { presetId: 'ollama', displayName: '本地', models: [{ id: 'qwen3' }], enabled: true }))
-      .result as { id: string };
-    await client.call('settings.setModelRoles', { primary: { providerId: saved.id, modelId: 'qwen3' }, fast: null });
-
-    model = new MockLanguageModelV4({
-      doStream: [
-        streamOf([
-          { type: 'stream-start', warnings: [] },
-          { type: 'tool-call', toolCallId: 'call_1', toolName: 'search_library', input: '{"keyword":"批判性思维","limit":5}' },
-          { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool_calls' }, usage },
-        ]),
-        streamOf([
-          { type: 'stream-start', warnings: [] },
-          { type: 'text-start', id: 't1' },
-          { type: 'text-delta', id: 't1', delta: '推荐《学会提问》（示例数据）。' },
-          { type: 'text-end', id: 't1' },
-          { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, usage },
-        ]),
-      ],
+    // 立项审批：普通用户不能审批；退回必须写意见
+    detail = await client.call<ExhibitionDetail>('exhibitions.submit', { id, kind: 'proposal' }, t);
+    expect(detail.status).toBe('proposal_pending');
+    const [pending] = await client.call<{ id: string }[]>(
+      'approvals.list',
+      { status: 'pending' },
+      approver.token,
+    );
+    expect(
+      (await client.raw('approvals.decide', { approvalId: pending!.id, decision: 'approve' }, t))
+        .error?.code,
+    ).toBe('forbidden');
+    expect(
+      (
+        await client.raw(
+          'approvals.decide',
+          { approvalId: pending!.id, decision: 'changes' },
+          approver.token,
+        )
+      ).error?.code,
+    ).toBe('invalid_params');
+    await client.call(
+      'approvals.decide',
+      { approvalId: pending!.id, decision: 'changes', comment: '请补充活动报名方式' },
+      approver.token,
+    );
+    detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    expect(detail.status).toBe('proposal_changes');
+    expect(detail.approvals[0]).toMatchObject({
+      status: 'changes_requested',
+      comment: '请补充活动报名方式',
+      reviewer: { name: '王老师' },
     });
 
-    const userMessage = { id: 'u1', role: 'user', parts: [{ type: 'text', text: '帮我找几本关于批判性思维的书，面向大一新生' }] };
-    const { chunks, error } = await client.stream('chat.send', { conversationId: 'conv_1', messages: [userMessage] });
-    expect(error).toBeUndefined();
+    // 修改后重新提交，审批同意
+    await client.call(
+      'exhibitions.updateProposal',
+      { id, proposal: { ...detail.proposal!, support: '一楼大厅展架两组；报名通过图书馆公众号' } },
+      t,
+    );
+    await client.call('exhibitions.submit', { id, kind: 'proposal' }, t);
+    const [again] = await client.call<{ id: string }[]>(
+      'approvals.list',
+      { status: 'pending' },
+      approver.token,
+    );
+    await client.call(
+      'approvals.decide',
+      { approvalId: again!.id, decision: 'approve', comment: '同意' },
+      approver.token,
+    );
+    detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    expect(detail.status).toBe('proposal_approved');
 
-    const toolOutput = chunks.find((c) => c.type === 'tool-output-available') as { output: { books: { title: string; isSample: boolean }[] } };
-    expect(toolOutput.output.books.map((b) => b.title)).toContain('学会提问');
-    expect(toolOutput.output.books.every((b) => b.isSample)).toBe(true);
-    expect(chunks.some((c) => c.type === 'text-delta')).toBe(true);
+    // 立项通过后方案锁定
+    expect(
+      (await client.raw('exhibitions.updatePlan', { id, plan: detail.plan }, t)).error?.code,
+    ).toBe('invalid_state');
 
-    const conversation = repos.conversations.get('conv_1');
-    expect(conversation?.title).toBe('帮我找几本关于批判性思维的书，面向大一新生');
-    expect(conversation?.messages).toHaveLength(2);
-    expect(client.inbox.some((m) => m.kind === 'evt' && m.topic === 'conversations.changed')).toBe(true);
+    // 活动包与上线审批；上线前首页为空
+    await client.stream('agent.run', { id, task: 'package' }, t);
+    await client.call('exhibitions.submit', { id, kind: 'package' }, t);
+    expect(await client.call('showcase.latest', undefined)).toBeNull();
+    const [pkgApproval] = await client.call<{ id: string }[]>(
+      'approvals.list',
+      { status: 'pending' },
+      approver.token,
+    );
+    await client.call(
+      'approvals.decide',
+      { approvalId: pkgApproval!.id, decision: 'approve' },
+      approver.token,
+    );
+
+    let showcase = await client.call<ShowcaseExhibition>('showcase.latest', undefined);
+    expect(showcase).toMatchObject({
+      id,
+      status: 'published',
+      title: '真假之间',
+      brief: { venue: '一楼大厅' },
+      owner: { name: '李同学' },
+    });
+    expect(showcase.sections.flatMap((s) => s.books)).toHaveLength(8);
+    expect(showcase.package.poster.headline).toBe('真假之间');
+
+    // 活动后：录入执行记录与匿名反馈
+    await client.call(
+      'exhibitions.updateExecution',
+      { id, execution: { heldOn: '2026-11-15', participants: 36, notes: '现场讨论热烈' } },
+      t,
+    );
+    detail = await client.call<ExhibitionDetail>(
+      'feedback.add',
+      {
+        id,
+        entries: [
+          { rating: 5, content: '案例讨论很有收获，联系我 13812345678' },
+          { rating: 4, content: '希望多一些实操练习环节' },
+        ],
+      },
+      t,
+    );
+    expect(detail.feedback[0]!.content).toContain('［手机号已隐去］');
+
+    await client.stream('agent.run', { id, task: 'retrospective' }, t);
+    showcase = await client.call<ShowcaseExhibition>('showcase.latest', undefined);
+    expect(showcase.status).toBe('completed');
+    expect(showcase.feedbackStats).toMatchObject({
+      count: 2,
+      averageRating: 4.5,
+      highlights: ['希望多一些实操练习环节'],
+    });
+    expect(showcase.retrospective?.nextTime.length).toBeGreaterThan(0);
+    expect(showcase.execution.participants).toBe(36);
+
+    detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    expect(detail.timeline.map((e) => e.type)).toEqual(
+      expect.arrayContaining(['created', 'agent', 'submit', 'review', 'publish', 'feedback']),
+    );
+  });
+
+  it('必须处理的核对项会阻止生成申请书；忽略时必须写明理由', async () => {
+    const t = curator.token;
+    const report = await client.call<{ sourceId: string }>(
+      'books.importText',
+      {
+        text: '书名,作者,索书号\n乡土中国,费孝通,C912/2\n心流,米哈里·契克森米哈赖,B84/62\n原则,瑞·达利欧,F830/45',
+        format: 'csv',
+        sourceName: '资料室',
+      },
+      t,
+    );
+    const { id } = await client.call<ExhibitionDetail>(
+      'exhibitions.create',
+      { ...brief, bookCount: 3, sourceIds: [report.sourceId] },
+      t,
+    );
+    await client.stream('agent.run', { id, task: 'curate' }, t);
+    let detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    const blockers = detail.checks.filter((c) => c.severity === 'blocker');
+    expect(blockers).toHaveLength(3);
+
+    const blocked = await client.stream('agent.run', { id, task: 'proposal' }, t);
+    expect(blocked.error).toMatchObject({
+      code: 'invalid_state',
+      message: expect.stringContaining('3 项'),
+    });
+
+    expect(
+      (await client.raw('checks.update', { id, itemId: blockers[0]!.id, status: 'dismissed' }, t))
+        .error?.code,
+    ).toBe('invalid_params');
+    for (const item of blockers) {
+      await client.call(
+        'checks.update',
+        { id, itemId: item.id, status: 'dismissed', note: '馆员确认在架，链接稍后补充' },
+        t,
+      );
+    }
+    expect((await client.stream('agent.run', { id, task: 'proposal' }, t)).error).toBeUndefined();
+    detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, t);
+    expect(detail.status).toBe('proposal_draft');
+  });
+
+  it('审批人不能审批自己提交的申请；他人不能修改别人的书展', async () => {
+    const t = approver.token;
+    const { id } = await client.call<ExhibitionDetail>('exhibitions.create', brief, t);
+    await client.stream('agent.run', { id, task: 'curate' }, t);
+    await client.stream('agent.run', { id, task: 'proposal' }, t);
+    await client.call('exhibitions.submit', { id, kind: 'proposal' }, t);
+    const [own] = await client.call<{ id: string }[]>('approvals.list', { status: 'pending' }, t);
+    expect(
+      (await client.raw('approvals.decide', { approvalId: own!.id, decision: 'approve' }, t)).error
+        ?.message,
+    ).toContain('不能审批自己');
+    expect((await client.raw('exhibitions.get', { id }, curator.token)).error?.code).toBe(
+      'forbidden',
+    );
+    expect(
+      (await client.raw('exhibitions.updateBrief', { id, brief }, admin.token)).error?.code,
+    ).toBe('forbidden');
+  });
+
+  it('没有任何可用模型时给出可操作的提示', async () => {
+    const [shared] = await client.call<{ id: string }[]>('providers.list', undefined, admin.token);
+    await client.call('providers.delete', { id: shared!.id }, admin.token);
+    const { id } = await client.call<ExhibitionDetail>('exhibitions.create', brief, curator.token);
+    const run = await client.stream('agent.run', { id, task: 'curate' }, curator.token);
+    expect(run.error).toMatchObject({ code: 'no_model', hint: expect.stringContaining('设置') });
+    const detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, curator.token);
+    expect(detail).toMatchObject({ status: 'draft', running: false });
   });
 });

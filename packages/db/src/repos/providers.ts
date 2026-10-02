@@ -11,6 +11,7 @@ interface ProviderRow {
   has_key: number;
   models: string;
   enabled: number;
+  owner_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,6 +27,7 @@ const toConfig = (row: ProviderRow): ProviderConfig => ({
   hasKey: row.has_key === 1,
   models: modelsSchema.parse(fromJson(row.models, [])),
   enabled: row.enabled === 1,
+  ownerId: row.owner_id,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -33,8 +35,14 @@ const toConfig = (row: ProviderRow): ProviderConfig => ({
 export class ProviderRepo {
   constructor(private readonly db: AppDatabase) {}
 
-  list(): ProviderConfig[] {
-    return this.db.all<ProviderRow>('SELECT * FROM providers ORDER BY created_at').map(toConfig);
+  /** 用户自己的服务商 + 超级管理员共享的服务商 */
+  listFor(userId: string): ProviderConfig[] {
+    return this.db
+      .all<ProviderRow>(
+        'SELECT * FROM providers WHERE owner_id = ? OR owner_id IS NULL ORDER BY owner_id IS NULL, created_at',
+        userId,
+      )
+      .map(toConfig);
   }
 
   get(id: string): ProviderConfig | undefined {
@@ -44,12 +52,12 @@ export class ProviderRepo {
 
   upsert(config: ProviderConfig): ProviderConfig {
     this.db.run(
-      `INSERT INTO providers(id, preset_id, display_name, base_url, secret_ref, has_key, models, enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO providers(id, preset_id, display_name, base_url, secret_ref, has_key, models, enabled, owner_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          preset_id = excluded.preset_id, display_name = excluded.display_name, base_url = excluded.base_url,
          secret_ref = excluded.secret_ref, has_key = excluded.has_key, models = excluded.models,
-         enabled = excluded.enabled, updated_at = excluded.updated_at`,
+         enabled = excluded.enabled, owner_id = excluded.owner_id, updated_at = excluded.updated_at`,
       config.id,
       config.presetId,
       config.displayName,
@@ -58,6 +66,7 @@ export class ProviderRepo {
       config.hasKey ? 1 : 0,
       toJson(config.models),
       config.enabled ? 1 : 0,
+      config.ownerId,
       config.createdAt,
       config.updatedAt,
     );

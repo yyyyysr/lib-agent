@@ -64,7 +64,15 @@ export class BookRepo {
 
   listSources(): BookSourceInfo[] {
     return this.db
-      .all<{ id: string; kind: BookSourceKind; name: string; meta: string | null; created_at: string; book_count: number }>(
+      .all<{
+        id: string;
+        kind: BookSourceKind;
+        name: string;
+        meta: string | null;
+        created_by: string | null;
+        created_at: string;
+        book_count: number;
+      }>(
         `SELECT s.*, (SELECT COUNT(*) FROM books b WHERE b.source_id = s.id) AS book_count
          FROM book_sources s ORDER BY CASE s.kind WHEN 'sample' THEN 0 ELSE 1 END, s.created_at DESC`,
       )
@@ -73,22 +81,44 @@ export class BookRepo {
         kind: row.kind,
         name: row.name,
         bookCount: Number(row.book_count),
+        createdBy: row.created_by ?? undefined,
         createdAt: row.created_at,
         meta: row.meta ? fromJson<Record<string, unknown>>(row.meta, {}) : undefined,
       }));
   }
 
-  createSource(input: { id?: string; kind: BookSourceKind; name: string; meta?: Record<string, unknown> }): string {
+  createSource(input: {
+    id?: string;
+    kind: BookSourceKind;
+    name: string;
+    meta?: Record<string, unknown>;
+    createdBy?: string;
+  }): string {
     const id = input.id ?? newId('src');
     this.db.run(
-      'INSERT INTO book_sources(id, kind, name, meta, created_at) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO book_sources(id, kind, name, meta, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
       id,
       input.kind,
       input.name,
       input.meta ? toJson(input.meta) : null,
+      input.createdBy ?? null,
       nowIso(),
     );
     return id;
+  }
+
+  totalBooks(): number {
+    return Number(this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM books')?.n ?? 0);
+  }
+
+  countIn(sourceIds: string[]): number {
+    if (sourceIds.length === 0) return this.totalBooks();
+    return Number(
+      this.db.get<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM books WHERE source_id IN (${sourceIds.map(() => '?').join(',')})`,
+        ...sourceIds,
+      )?.n ?? 0,
+    );
   }
 
   deleteSource(id: string): void {
@@ -139,7 +169,10 @@ export class BookRepo {
 
   getByIds(ids: string[]): BookRecord[] {
     if (ids.length === 0) return [];
-    const rows = this.db.all<BookRow>(`SELECT * FROM books WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids);
+    const rows = this.db.all<BookRow>(
+      `SELECT * FROM books WHERE id IN (${ids.map(() => '?').join(',')})`,
+      ...ids,
+    );
     const byId = new Map(rows.map((row) => [row.id, toRecord(row)]));
     return ids.map((id) => byId.get(id)).filter((book): book is BookRecord => Boolean(book));
   }
@@ -169,7 +202,9 @@ export class BookRepo {
       params.push(...query.sourceIds);
     }
     const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    const total = Number(this.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM books b ${clause}`, ...params)?.n ?? 0);
+    const total = Number(
+      this.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM books b ${clause}`, ...params)?.n ?? 0,
+    );
 
     const first = terms[0];
     const order = first

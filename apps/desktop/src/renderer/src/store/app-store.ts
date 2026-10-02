@@ -1,33 +1,37 @@
 import { create } from 'zustand';
-import type { CoreStatus } from '@yys/shared';
+import type { CoreStatus, WorkflowStepKey } from '@yys/shared';
 
-export type SettingsSection = 'models' | 'school' | 'appearance' | 'data' | 'about';
+export type SettingsSection = 'account' | 'models' | 'school' | 'appearance' | 'data' | 'about';
 
 export type View =
   | { name: 'home' }
-  | { name: 'chat'; id: string; pendingText?: string }
-  | { name: 'library'; sourceId?: string }
+  | { name: 'showcase'; id: string }
+  | { name: 'curation' }
+  | { name: 'exhibition'; id: string; step?: WorkflowStepKey }
+  | { name: 'approvals' }
+  | { name: 'library' }
+  | { name: 'admin'; tab: 'users' | 'data' }
   | { name: 'settings'; section: SettingsSection };
+
+/** 需要登录才能打开的页面 */
+export const requiresLogin = (view: View): boolean =>
+  view.name !== 'home' && view.name !== 'showcase';
 
 interface AppState {
   view: View;
   sidebarOpen: boolean;
-  panelOpen: boolean;
   coreStatus: CoreStatus;
   navigate: (view: View) => void;
   toggleSidebar: () => void;
-  togglePanel: () => void;
   setCoreStatus: (status: CoreStatus) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
   view: { name: 'home' },
   sidebarOpen: true,
-  panelOpen: true,
   coreStatus: { state: 'starting' },
   navigate: (view) => set({ view }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
-  togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
   setCoreStatus: (coreStatus) => set({ coreStatus }),
 }));
 

@@ -53,7 +53,9 @@ export function parseDelimited(text: string, delimiter?: ',' | '\t'): RawTable {
     delimiter: delimiter ?? '',
     skipEmptyLines: 'greedy',
   });
-  const fatal = result.errors.find((error) => error.type === 'Delimiter' && result.data.length === 0);
+  const fatal = result.errors.find(
+    (error) => error.type === 'Delimiter' && result.data.length === 0,
+  );
   if (fatal) throw new AppError('import_failed', `无法识别分隔符：${fatal.message}`);
   return fromMatrix(result.data);
 }
@@ -72,7 +74,8 @@ export function parseTxt(text: string): RawTable {
     .filter(Boolean);
   const first = lines[0] ?? '';
   if (first.includes('\t')) return parseDelimited(lines.join('\n'), '\t');
-  if (/[,，]/.test(first) && /书名|题名|title/i.test(first)) return parseDelimited(lines.join('\n'), ',');
+  if (/[,，]/.test(first) && /书名|题名|title/i.test(first))
+    return parseDelimited(lines.join('\n'), ',');
 
   const headers = ['书名', '作者', '出版社'];
   const rows = lines.map((line) => {
@@ -82,7 +85,11 @@ export function parseTxt(text: string): RawTable {
       return { 书名: quoted[1]!.trim(), 作者: (quoted[2] ?? '').trim(), 出版社: '' };
     }
     const parts = cleaned.split(/\s*[/／|｜]\s*|\s+[-—]\s+/);
-    return { 书名: parts[0]?.trim() ?? '', 作者: parts[1]?.trim() ?? '', 出版社: parts[2]?.trim() ?? '' };
+    return {
+      书名: parts[0]?.trim() ?? '',
+      作者: parts[1]?.trim() ?? '',
+      出版社: parts[2]?.trim() ?? '',
+    };
   });
   return { headers, rows };
 }
@@ -91,14 +98,17 @@ function stringifyValue(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (Array.isArray(value)) return value.map(stringifyValue).filter(Boolean).join('；');
   if (typeof value === 'object') {
-    const named = (value as Record<string, unknown>).name ?? (value as Record<string, unknown>).title;
+    const named =
+      (value as Record<string, unknown>).name ?? (value as Record<string, unknown>).title;
     return named !== undefined ? stringifyValue(named) : JSON.stringify(value);
   }
   return String(value).trim();
 }
 
 const isRecordArray = (value: unknown): value is Record<string, unknown>[] =>
-  Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'object' && item !== null && !Array.isArray(item));
+  Array.isArray(value) &&
+  value.length > 0 &&
+  value.every((item) => typeof item === 'object' && item !== null && !Array.isArray(item));
 
 function findRecordArray(value: unknown, depth = 0): Record<string, unknown>[] | null {
   if (isRecordArray(value)) return value;
@@ -124,11 +134,19 @@ export function parseJson(text: string): RawTable {
       const parsed = lines.map((line) => JSON.parse(line) as unknown);
       records = isRecordArray(parsed) ? parsed : null;
     } catch {
-      throw new AppError('import_failed', 'JSON 格式有误，无法解析', '请确认文件是标准 JSON 或每行一条记录的 JSON Lines');
+      throw new AppError(
+        'import_failed',
+        'JSON 格式有误，无法解析',
+        '请确认文件是标准 JSON 或每行一条记录的 JSON Lines',
+      );
     }
   }
   if (!records) {
-    throw new AppError('import_failed', '没有在 JSON 中找到书目列表', '需要一个对象数组，例如 [{"书名": "...", "作者": "..."}]');
+    throw new AppError(
+      'import_failed',
+      '没有在 JSON 中找到书目列表',
+      '需要一个对象数组，例如 [{"书名": "...", "作者": "..."}]',
+    );
   }
   const headers: string[] = [];
   for (const record of records) {
@@ -144,7 +162,12 @@ export function parseJson(text: string): RawTable {
 
 function cellLink(cell: ExcelJS.Cell): string | undefined {
   const value = cell.value;
-  if (value && typeof value === 'object' && 'hyperlink' in value && typeof value.hyperlink === 'string') {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'hyperlink' in value &&
+    typeof value.hyperlink === 'string'
+  ) {
     return value.hyperlink;
   }
   return undefined;
@@ -176,7 +199,11 @@ function stringifyRich(text: unknown): string {
 /** Excel：读取第一个有数据的工作表，首个非空行作为表头；单元格超链接保留为 URL */
 export async function parseXlsx(bytes: Uint8Array): Promise<RawTable> {
   if (bytes[0] === 0xd0 && bytes[1] === 0xcf) {
-    throw new AppError('unsupported_format', '暂不支持旧版 .xls 文件', '请在 Excel 中另存为 .xlsx 或 .csv 后再导入');
+    throw new AppError(
+      'unsupported_format',
+      '暂不支持旧版 .xls 文件',
+      '请在 Excel 中另存为 .xlsx 或 .csv 后再导入',
+    );
   }
   const workbook = new ExcelJS.Workbook();
   try {

@@ -10,7 +10,8 @@ export function initPlatform(): void {
 }
 
 /** 主修饰键：macOS 为 ⌘，其他平台为 Ctrl */
-export const isModKey = (event: KeyboardEvent | React.KeyboardEvent): boolean => (isMac ? event.metaKey : event.ctrlKey);
+export const isModKey = (event: KeyboardEvent | React.KeyboardEvent): boolean =>
+  isMac ? event.metaKey : event.ctrlKey;
 
 export function formatShortcut(key: string, options: { shift?: boolean } = {}): string {
   if (isMac) return `${options.shift ? '⇧' : ''}⌘${key.toUpperCase()}`;

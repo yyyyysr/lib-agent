@@ -6,13 +6,18 @@ import { mapProviderError } from './errors';
 const PROBE_TIMEOUT_MS = 45_000;
 
 const signalFor = (outer?: AbortSignal): AbortSignal =>
-  outer ? AbortSignal.any([outer, AbortSignal.timeout(PROBE_TIMEOUT_MS)]) : AbortSignal.timeout(PROBE_TIMEOUT_MS);
+  outer
+    ? AbortSignal.any([outer, AbortSignal.timeout(PROBE_TIMEOUT_MS)])
+    : AbortSignal.timeout(PROBE_TIMEOUT_MS);
 
 /**
  * 三步探测：基础对话（失败即判定连接失败）→ 结构化输出 → 工具调用。
  * 后两项决定该模型能否用于策展流程与对话 Agent。
  */
-export async function testConnection(model: LanguageModel, signal?: AbortSignal): Promise<ConnectionTestResult> {
+export async function testConnection(
+  model: LanguageModel,
+  signal?: AbortSignal,
+): Promise<ConnectionTestResult> {
   const started = Date.now();
   let sample: string;
   try {

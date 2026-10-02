@@ -1,12 +1,42 @@
 import { useEffect, useState } from 'react';
-import { BookCopy, ChevronDown, ClipboardPaste, ExternalLink, FileUp, FolderInput, Library, Search, Trash2, University } from 'lucide-react';
-import { assessCompleteness, bookFieldLabels, type BookRecord, type BookSourceInfo } from '@yys/shared';
+import {
+  BookCopy,
+  ChevronDown,
+  ClipboardPaste,
+  ExternalLink,
+  FileUp,
+  FolderInput,
+  Library,
+  Search,
+  Trash2,
+  University,
+} from 'lucide-react';
+import {
+  assessCompleteness,
+  bookFieldLabels,
+  type BookRecord,
+  type BookSourceInfo,
+} from '@yys/shared';
 import { TopBar } from '../../app/TopBar';
-import { Badge, Button, Dialog, EmptyState, IconButton, Input, Menu, MenuContent, MenuItem, MenuTrigger, Spinner, Tooltip } from '../../components/ui';
+import {
+  Badge,
+  Button,
+  Dialog,
+  EmptyState,
+  IconButton,
+  Input,
+  Menu,
+  MenuContent,
+  MenuItem,
+  MenuTrigger,
+  Spinner,
+  Tooltip,
+} from '../../components/ui';
 import { cn } from '../../lib/cn';
 import { core, errorText } from '../../lib/core-client';
 import { useRpc } from '../../lib/use-rpc';
 import { toast, useAppStore } from '../../store/app-store';
+import { useAuth, useRole } from '../../store/auth-store';
 import { useImportBooks } from './useImportBooks';
 
 const PAGE_SIZE = 50;
@@ -20,18 +50,47 @@ function useDebounced<T>(value: T, ms = 250): T {
   return debounced;
 }
 
-function SourceItem({ source, active, onClick, onDelete }: { source: BookSourceInfo | null; active: boolean; onClick: () => void; onDelete?: () => void }) {
-  const icon = !source ? <Library className="size-4" /> : source.kind === 'sample' ? <BookCopy className="size-4" /> : <FolderInput className="size-4" />;
+function SourceItem({
+  source,
+  active,
+  onClick,
+  onDelete,
+}: {
+  source: BookSourceInfo | null;
+  active: boolean;
+  onClick: () => void;
+  onDelete?: () => void;
+}) {
+  const icon = !source ? (
+    <Library className="size-4" />
+  ) : source.kind === 'sample' ? (
+    <BookCopy className="size-4" />
+  ) : (
+    <FolderInput className="size-4" />
+  );
   return (
-    <div className={cn('group flex h-9 items-center rounded-lg pr-1', active ? 'bg-surface-2' : 'hover:bg-surface-hover')}>
-      <button onClick={onClick} className="flex h-full min-w-0 flex-1 items-center gap-2.5 px-2.5 text-left text-sm">
+    <div
+      className={cn(
+        'group flex h-9 items-center rounded-lg pr-1',
+        active ? 'bg-surface-2' : 'hover:bg-surface-hover',
+      )}
+    >
+      <button
+        onClick={onClick}
+        className="flex h-full min-w-0 flex-1 items-center gap-2.5 px-2.5 text-left text-sm"
+      >
         <span className="text-muted">{icon}</span>
         <span className="flex-1 truncate">{source ? source.name : '全部书目'}</span>
         {source?.kind === 'sample' && <Badge>示例</Badge>}
         {source && <span className="text-xs text-subtle">{source.bookCount}</span>}
       </button>
       {onDelete && (
-        <IconButton label="删除这个来源" size="sm" onClick={onDelete} className="opacity-0 group-hover:opacity-100">
+        <IconButton
+          label="删除这个来源"
+          size="sm"
+          onClick={onDelete}
+          className="opacity-0 group-hover:opacity-100"
+        >
           <Trash2 className="size-3.5" />
         </IconButton>
       )}
@@ -41,12 +100,17 @@ function SourceItem({ source, active, onClick, onDelete }: { source: BookSourceI
 
 function CompletenessBadge({ book }: { book: BookRecord }) {
   const { missingRequired, missingRecommended } = assessCompleteness(book);
-  if (missingRequired.length === 0 && missingRecommended.length === 0) return <Badge tone="success">完整</Badge>;
-  const missing = [...missingRequired, ...missingRecommended].map((f) => bookFieldLabels[f]).join('、');
+  if (missingRequired.length === 0 && missingRecommended.length === 0)
+    return <Badge tone="success">完整</Badge>;
+  const missing = [...missingRequired, ...missingRecommended]
+    .map((f) => bookFieldLabels[f])
+    .join('、');
   return (
     <Tooltip content={`缺少：${missing}`}>
       <span>
-        <Badge tone={missingRequired.length ? 'danger' : 'warning'}>缺 {missingRequired.length + missingRecommended.length} 项</Badge>
+        <Badge tone={missingRequired.length ? 'danger' : 'warning'}>
+          缺 {missingRequired.length + missingRecommended.length} 项
+        </Badge>
       </span>
     </Tooltip>
   );
@@ -54,6 +118,8 @@ function CompletenessBadge({ book }: { book: BookRecord }) {
 
 export function LibraryView() {
   const navigate = useAppStore((s) => s.navigate);
+  const me = useAuth((s) => s.user);
+  const isAdmin = useRole('superadmin');
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -62,7 +128,11 @@ export function LibraryView() {
   const { importFromFile, openPaste, dialogs, busy } = useImportBooks();
 
   const sources = useRpc('books.sources', undefined, { topics: ['books.changed'] });
-  const books = useRpc('books.search', { text: query, sourceIds: sourceId ? [sourceId] : undefined, limit }, { topics: ['books.changed'] });
+  const books = useRpc(
+    'books.search',
+    { text: query, sourceIds: sourceId ? [sourceId] : undefined, limit },
+    { topics: ['books.changed'] },
+  );
 
   useEffect(() => setLimit(PAGE_SIZE), [query, sourceId]);
 
@@ -113,15 +183,26 @@ export function LibraryView() {
               source={source}
               active={sourceId === source.id}
               onClick={() => setSourceId(source.id)}
-              onDelete={source.kind === 'sample' ? undefined : () => setPendingDelete(source)}
+              onDelete={
+                source.kind !== 'sample' && (source.createdBy === me?.id || isAdmin)
+                  ? () => setPendingDelete(source)
+                  : undefined
+              }
             />
           ))}
           <div className="mt-auto rounded-xl border border-dashed border-border-strong p-3">
             <div className="flex items-center gap-2 text-[13px] font-medium">
               <University className="size-4 text-muted" /> 校园馆藏数据库
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-muted">学校授权后可登录直接检索馆藏。目前请在学校系统中导出后导入。</p>
-            <Button size="sm" variant="outline" className="mt-2.5 w-full" onClick={() => navigate({ name: 'settings', section: 'school' })}>
+            <p className="mt-1 text-xs leading-relaxed text-muted">
+              学校授权后可登录直接检索馆藏。目前请在学校系统中导出后导入。
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-2.5 w-full"
+              onClick={() => navigate({ name: 'settings', section: 'school' })}
+            >
               学校设置
             </Button>
           </div>
@@ -131,19 +212,34 @@ export function LibraryView() {
           <div className="flex items-center gap-3 px-5 py-3">
             <div className="relative max-w-md flex-1">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
-              <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="按书名、作者、主题词、摘要检索" className="pl-9" />
+              <Input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="按书名、作者、主题词、摘要检索"
+                className="pl-9"
+              />
             </div>
-            <span className="text-[13px] text-muted">{books.loading && !books.data ? '加载中…' : `共 ${total} 本`}</span>
+            <span className="text-[13px] text-muted">
+              {books.loading && !books.data ? '加载中…' : `共 ${total} 本`}
+            </span>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto px-5 pb-5">
             {books.error ? (
-              <EmptyState title="加载失败" description={errorText(books.error).message} action={<Button onClick={books.reload}>重试</Button>} />
+              <EmptyState
+                title="加载失败"
+                description={errorText(books.error).message}
+                action={<Button onClick={books.reload}>重试</Button>}
+              />
             ) : items.length === 0 && !books.loading ? (
               <EmptyState
                 icon={<Library className="size-8" />}
                 title={query ? '没有匹配的书目' : '这个来源还没有书目'}
-                description={query ? '换个关键词试试；两个字的关键词也可以检索。' : '从学校系统导出 Excel / CSV / TXT / JSON 后导入。'}
+                description={
+                  query
+                    ? '换个关键词试试；两个字的关键词也可以检索。'
+                    : '从学校系统导出 Excel / CSV / TXT / JSON 后导入。'
+                }
               />
             ) : (
               <table data-selectable className="w-full text-left text-[13px]">
@@ -159,23 +255,36 @@ export function LibraryView() {
                 </thead>
                 <tbody>
                   {items.map((book) => (
-                    <tr key={book.id} className="border-b border-border align-top hover:bg-surface-hover/60">
+                    <tr
+                      key={book.id}
+                      className="border-b border-border align-top hover:bg-surface-hover/60"
+                    >
                       <td className="py-2.5 pr-3">
                         <div className="flex items-center gap-1.5 font-medium">
                           {book.title}
                           {book.isSample && <Badge>示例</Badge>}
                         </div>
-                        {book.summary && <p className="mt-0.5 line-clamp-1 text-xs text-muted">{book.summary}</p>}
+                        {book.summary && (
+                          <p className="mt-0.5 line-clamp-1 text-xs text-muted">{book.summary}</p>
+                        )}
                       </td>
                       <td className="py-2.5 pr-3 text-muted">{book.authors.join('、') || '—'}</td>
-                      <td className="py-2.5 pr-3 whitespace-nowrap text-muted">{book.callNumber ?? '—'}</td>
-                      <td className="py-2.5 pr-3 text-muted">{book.subjects?.slice(0, 3).join('、') || '—'}</td>
+                      <td className="py-2.5 pr-3 whitespace-nowrap text-muted">
+                        {book.callNumber ?? '—'}
+                      </td>
+                      <td className="py-2.5 pr-3 text-muted">
+                        {book.subjects?.slice(0, 3).join('、') || '—'}
+                      </td>
                       <td className="py-2.5 pr-3">
                         <CompletenessBadge book={book} />
                       </td>
                       <td className="py-2.5">
                         {book.sourceUrl && /^https?:\/\//.test(book.sourceUrl) && (
-                          <IconButton label="打开来源链接" size="sm" onClick={() => void window.yys.shell.openExternal(book.sourceUrl!)}>
+                          <IconButton
+                            label="打开来源链接"
+                            size="sm"
+                            onClick={() => void window.yys.shell.openExternal(book.sourceUrl!)}
+                          >
                             <ExternalLink className="size-3.5" />
                           </IconButton>
                         )}
@@ -187,7 +296,12 @@ export function LibraryView() {
             )}
             {items.length < total && (
               <div className="flex justify-center pt-4">
-                <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + PAGE_SIZE)} disabled={books.loading}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLimit((l) => l + PAGE_SIZE)}
+                  disabled={books.loading}
+                >
                   {books.loading ? <Spinner /> : '加载更多'}
                 </Button>
               </div>

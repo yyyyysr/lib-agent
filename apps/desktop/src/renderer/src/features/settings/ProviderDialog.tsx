@@ -1,11 +1,20 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, CloudDownload, ExternalLink, Plus, X, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  CloudDownload,
+  ExternalLink,
+  Plus,
+  X,
+  XCircle,
+} from 'lucide-react';
 import type { ConnectionTestResult, ModelInfo, ProviderConfig, ProviderPreset } from '@yys/shared';
 import { Badge, Button, Dialog, Field, Input } from '../../components/ui';
 import { cn } from '../../lib/cn';
 import { core, errorText } from '../../lib/core-client';
 import { useRpc } from '../../lib/use-rpc';
 import { toast } from '../../store/app-store';
+import { useRole } from '../../store/auth-store';
 
 const groupLabels: Record<ProviderPreset['group'], string> = {
   domestic: '国内服务商',
@@ -20,9 +29,23 @@ export function CapabilityBadges({ model }: { model: ModelInfo }) {
   if (!caps) return <Badge>未测试</Badge>;
   return (
     <>
-      <Badge tone={caps.toolCalling === 'yes' ? 'success' : 'warning'}>{caps.toolCalling === 'yes' ? '工具调用 ✓' : '不支持工具调用'}</Badge>
-      <Badge tone={caps.structuredOutput === 'native' ? 'success' : caps.structuredOutput === 'none' ? 'warning' : 'neutral'}>
-        {caps.structuredOutput === 'native' ? '结构化输出 ✓' : caps.structuredOutput === 'none' ? '不支持结构化输出' : '结构化输出待确认'}
+      <Badge tone={caps.toolCalling === 'yes' ? 'success' : 'warning'}>
+        {caps.toolCalling === 'yes' ? '工具调用 ✓' : '不支持工具调用'}
+      </Badge>
+      <Badge
+        tone={
+          caps.structuredOutput === 'native'
+            ? 'success'
+            : caps.structuredOutput === 'none'
+              ? 'warning'
+              : 'neutral'
+        }
+      >
+        {caps.structuredOutput === 'native'
+          ? '结构化输出 ✓'
+          : caps.structuredOutput === 'none'
+            ? '不支持结构化输出'
+            : '结构化输出待确认'}
       </Badge>
     </>
   );
@@ -40,22 +63,37 @@ function TestResultView({ result }: { result: ConnectionTestResult }) {
       </div>
     );
   }
-  const usable = result.capabilities.toolCalling === 'yes' && result.capabilities.structuredOutput !== 'none';
+  const usable =
+    result.capabilities.toolCalling === 'yes' && result.capabilities.structuredOutput !== 'none';
   return (
     <div className="flex gap-2.5 rounded-xl bg-accent-soft p-3">
       <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
       <div className="min-w-0 space-y-1.5">
-        <p className="text-[13px] text-success">连接成功 · 首次响应 {(result.latencyMs / 1000).toFixed(1)} 秒</p>
+        <p className="text-[13px] text-success">
+          连接成功 · 首次响应 {(result.latencyMs / 1000).toFixed(1)} 秒
+        </p>
         <div className="flex flex-wrap gap-1.5">
           <CapabilityBadges model={{ id: '', capabilities: result.capabilities }} />
         </div>
-        {!usable && <p className="text-xs text-warning">该模型缺少部分能力，可以对话，但不建议作为主模型执行策展流程。</p>}
+        {!usable && (
+          <p className="text-xs text-warning">
+            该模型缺少部分能力，可以对话，但不建议作为主模型执行策展流程。
+          </p>
+        )}
       </div>
     </div>
   );
 }
 
-export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean; onOpenChange: (open: boolean) => void; editing?: ProviderConfig }) {
+export function ProviderDialog({
+  open,
+  onOpenChange,
+  editing,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editing?: ProviderConfig;
+}) {
   const { data: presets = [] } = useRpc('providers.presets', undefined);
   const { data: roles } = useRpc('settings.getModelRoles', undefined);
   const [presetId, setPresetId] = useState<string | null>(null);
@@ -63,6 +101,8 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
   const [baseURL, setBaseURL] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [keySaved, setKeySaved] = useState(false);
+  const [shared, setShared] = useState(false);
+  const isAdmin = useRole('superadmin');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [newModel, setNewModel] = useState('');
   const [remoteModels, setRemoteModels] = useState<ModelInfo[] | null>(null);
@@ -78,6 +118,7 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
     setBaseURL(editing?.baseURL ?? '');
     setApiKey('');
     setKeySaved(Boolean(editing?.hasKey));
+    setShared(editing ? editing.ownerId === null : false);
     setModels(editing?.models ?? []);
     setNewModel('');
     setRemoteModels(null);
@@ -100,7 +141,10 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
     if (!preset) throw new Error('请选择服务商');
     if (preset.id === 'custom' && !baseURL.trim()) throw new Error('请填写接口地址（Base URL）');
     const pendingModel = newModel.trim();
-    const allModels = pendingModel && !models.some((m) => m.id === pendingModel) ? [...models, { id: pendingModel }] : models;
+    const allModels =
+      pendingModel && !models.some((m) => m.id === pendingModel)
+        ? [...models, { id: pendingModel }]
+        : models;
     if (pendingModel) {
       setModels(allModels);
       setNewModel('');
@@ -112,6 +156,7 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
       baseURL: baseURL.trim() || undefined,
       models: allModels,
       enabled: editing?.enabled ?? true,
+      shared,
     });
     if (apiKey.trim()) {
       await window.yys.secrets.set(saved.secretRef, apiKey.trim());
@@ -120,7 +165,10 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
     }
     setSavedId(saved.id);
     if (!roles?.primary && allModels[0]) {
-      await core.call('settings.setModelRoles', { primary: { providerId: saved.id, modelId: allModels[0].id }, fast: roles?.fast ?? null });
+      await core.call('settings.setModelRoles', {
+        primary: { providerId: saved.id, modelId: allModels[0].id },
+        fast: roles?.fast ?? null,
+      });
     }
     return saved;
   };
@@ -135,7 +183,12 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
       } else if (kind === 'fetch') {
         const list = await core.call('providers.listRemoteModels', { providerId: saved.id });
         setRemoteModels(list);
-        if (list.length === 0) toast({ tone: 'info', title: '服务商没有返回可用模型', description: '请手动填写模型名称' });
+        if (list.length === 0)
+          toast({
+            tone: 'info',
+            title: '服务商没有返回可用模型',
+            description: '请手动填写模型名称',
+          });
       } else {
         const modelId = testModel || models[0]?.id;
         if (!modelId) throw new Error('请先添加一个模型');
@@ -145,7 +198,15 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
         if (result.ok) {
           setModels((list) =>
             list.some((m) => m.id === modelId)
-              ? list.map((m) => (m.id === modelId ? { ...m, capabilities: result.capabilities, testedAt: new Date().toISOString() } : m))
+              ? list.map((m) =>
+                  m.id === modelId
+                    ? {
+                        ...m,
+                        capabilities: result.capabilities,
+                        testedAt: new Date().toISOString(),
+                      }
+                    : m,
+                )
               : [...list, { id: modelId, capabilities: result.capabilities }],
           );
         }
@@ -170,7 +231,10 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
       width="max-w-2xl"
       title={
         preset && !editing ? (
-          <button onClick={() => setPresetId(null)} className="flex items-center gap-1.5 hover:text-muted">
+          <button
+            onClick={() => setPresetId(null)}
+            className="flex items-center gap-1.5 hover:text-muted"
+          >
             <ArrowLeft className="size-4" /> {preset.name}
           </button>
         ) : editing ? (
@@ -179,14 +243,28 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
           '添加模型服务商'
         )
       }
-      description={preset ? 'API Key 使用系统钥匙串加密保存在本机，请求直接发往服务商，不经过任何第三方服务器。' : '选择你已有账号的服务商，使用自己的 API Key（BYOK）。'}
+      description={
+        preset
+          ? 'API Key 使用系统钥匙串加密保存在本机，请求直接发往服务商，不经过任何第三方服务器。'
+          : '选择你已有账号的服务商，使用自己的 API Key（BYOK）。'
+      }
       footer={
         preset && (
           <>
-            <Button variant="outline" loading={busy === 'test'} disabled={busy !== null} onClick={() => void run('test')}>
+            <Button
+              variant="outline"
+              loading={busy === 'test'}
+              disabled={busy !== null}
+              onClick={() => void run('test')}
+            >
               测试连接
             </Button>
-            <Button variant="primary" loading={busy === 'save'} disabled={busy !== null} onClick={() => void run('save')}>
+            <Button
+              variant="primary"
+              loading={busy === 'save'}
+              disabled={busy !== null}
+              onClick={() => void run('save')}
+            >
               保存
             </Button>
           </>
@@ -211,7 +289,9 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
                       className="rounded-xl border border-border px-3 py-2.5 text-left text-[13px] hover:bg-surface-hover"
                     >
                       {p.name}
-                      {!p.requiresKey && <span className="mt-0.5 block text-[11px] text-subtle">无需 API Key</span>}
+                      {!p.requiresKey && (
+                        <span className="mt-0.5 block text-[11px] text-subtle">无需 API Key</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -222,11 +302,19 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <Field label="显示名称">
-              <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={preset.name} />
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={preset.name}
+              />
             </Field>
             {preset.editableBaseURL ? (
               <Field label="接口地址（Base URL）">
-                <Input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} placeholder={preset.defaultBaseURL ?? 'https://…/v1'} />
+                <Input
+                  value={baseURL}
+                  onChange={(e) => setBaseURL(e.target.value)}
+                  placeholder={preset.defaultBaseURL ?? 'https://…/v1'}
+                />
               </Field>
             ) : (
               <Field label="接口地址">
@@ -239,7 +327,10 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
             label={preset.requiresKey ? 'API Key' : 'API Key（可选）'}
             hint={
               preset.keyUrl ? (
-                <button onClick={() => void window.yys.shell.openExternal(preset.keyUrl!)} className="inline-flex items-center gap-1 text-accent hover:underline">
+                <button
+                  onClick={() => void window.yys.shell.openExternal(preset.keyUrl!)}
+                  className="inline-flex items-center gap-1 text-accent hover:underline"
+                >
                   前往 {preset.name} 获取 Key <ExternalLink className="size-3" />
                 </button>
               ) : undefined
@@ -258,7 +349,13 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[13px] font-medium">模型</span>
-              <Button size="sm" variant="ghost" loading={busy === 'fetch'} disabled={busy !== null} onClick={() => void run('fetch')}>
+              <Button
+                size="sm"
+                variant="ghost"
+                loading={busy === 'fetch'}
+                disabled={busy !== null}
+                onClick={() => void run('fetch')}
+              >
                 <CloudDownload className="size-3.5" /> 从服务商获取
               </Button>
             </div>
@@ -274,9 +371,15 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
                       onChange={() => setTestModel(model.id)}
                       className="accent-(--accent)"
                     />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{model.id}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[13px]">
+                      {model.id}
+                    </span>
                     <CapabilityBadges model={model} />
-                    <button aria-label={`移除 ${model.id}`} onClick={() => setModels((list) => list.filter((m) => m.id !== model.id))} className="text-subtle hover:text-fg">
+                    <button
+                      aria-label={`移除 ${model.id}`}
+                      onClick={() => setModels((list) => list.filter((m) => m.id !== model.id))}
+                      className="text-subtle hover:text-fg"
+                    >
                       <X className="size-3.5" />
                     </button>
                   </div>
@@ -296,13 +399,19 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
                 placeholder="手动填写模型名称，如 deepseek-chat、qwen-plus"
                 className="font-mono text-[13px]"
               />
-              <Button variant="outline" onClick={() => (addModel(newModel), setNewModel(''))} disabled={!newModel.trim()}>
+              <Button
+                variant="outline"
+                onClick={() => (addModel(newModel), setNewModel(''))}
+                disabled={!newModel.trim()}
+              >
                 <Plus className="size-3.5" /> 添加
               </Button>
             </div>
             {remoteModels && remoteModels.length > 0 && (
               <div className="max-h-40 overflow-y-auto rounded-xl bg-surface p-2">
-                <p className="px-1 pb-1.5 text-[11px] text-subtle">点击添加（共 {remoteModels.length} 个）</p>
+                <p className="px-1 pb-1.5 text-[11px] text-subtle">
+                  点击添加（共 {remoteModels.length} 个）
+                </p>
                 <div className="flex flex-wrap gap-1.5">
                   {remoteModels.map((m) => {
                     const added = models.some((x) => x.id === m.id);
@@ -311,7 +420,12 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
                         key={m.id}
                         disabled={added}
                         onClick={() => addModel(m.id)}
-                        className={cn('rounded-md border px-2 py-0.5 font-mono text-xs', added ? 'border-accent text-accent' : 'border-border bg-bg hover:border-border-strong')}
+                        className={cn(
+                          'rounded-md border px-2 py-0.5 font-mono text-xs',
+                          added
+                            ? 'border-accent text-accent'
+                            : 'border-border bg-bg hover:border-border-strong',
+                        )}
                       >
                         {m.id}
                       </button>
@@ -321,6 +435,23 @@ export function ProviderDialog({ open, onOpenChange, editing }: { open: boolean;
               </div>
             )}
           </div>
+
+          {isAdmin && (
+            <label className="flex items-start gap-2.5 rounded-xl bg-surface p-3 text-[13px]">
+              <input
+                type="checkbox"
+                checked={shared}
+                onChange={(e) => setShared(e.target.checked)}
+                className="mt-0.5 accent-(--accent)"
+              />
+              <span>
+                <span className="font-medium">共享给全部用户</span>
+                <span className="block text-xs text-muted">
+                  普通用户未配置自己的模型时，智能体会使用这个服务商。费用计入你的账户。
+                </span>
+              </span>
+            </label>
+          )}
 
           {testResult && <TestResultView result={testResult} />}
         </div>

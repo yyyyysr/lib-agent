@@ -10,7 +10,8 @@ const palette = {
   dark: { bg: '#212121', fg: '#ececec' },
 };
 
-const currentPalette = (): (typeof palette)['light'] => (nativeTheme.shouldUseDarkColors ? palette.dark : palette.light);
+const currentPalette = (): (typeof palette)['light'] =>
+  nativeTheme.shouldUseDarkColors ? palette.dark : palette.light;
 
 export function createMainWindow(): BrowserWindow {
   const colors = currentPalette();
@@ -25,7 +26,9 @@ export function createMainWindow(): BrowserWindow {
     titleBarStyle: 'hidden',
     ...(isMac
       ? { trafficLightPosition: { x: 18, y: 17 } }
-      : { titleBarOverlay: { color: colors.bg, symbolColor: colors.fg, height: TITLE_BAR_HEIGHT } }),
+      : {
+          titleBarOverlay: { color: colors.bg, symbolColor: colors.fg, height: TITLE_BAR_HEIGHT },
+        }),
     webPreferences: {
       preload: join(import.meta.dirname, '../preload/index.cjs'),
       sandbox: true,

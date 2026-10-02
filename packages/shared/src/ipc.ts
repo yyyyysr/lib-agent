@@ -4,6 +4,15 @@
  */
 export type ThemeSource = 'system' | 'light' | 'dark';
 
+export const supportedImportExtensions = ['csv', 'tsv', 'txt', 'xlsx', 'xlsm', 'json', 'jsonl'];
+
+export interface CaptureRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface DesktopBridge {
   platform: 'darwin' | 'win32' | 'linux';
   requestCorePort(): void;
@@ -16,6 +25,12 @@ export interface DesktopBridge {
   };
   dialog: {
     openBookFile(): Promise<string | null>;
+  };
+  files: {
+    /** 弹出保存对话框写入文本文件，返回保存路径；用户取消时返回 null */
+    saveText(defaultName: string, content: string): Promise<string | null>;
+    /** 截取当前窗口中的一块区域保存为 PNG（用于导出海报） */
+    savePng(defaultName: string, rect: CaptureRect): Promise<string | null>;
   };
   shell: {
     openExternal(url: string): Promise<void>;
@@ -40,6 +55,8 @@ export const ipcChannels = {
   secretsRemove: 'secrets:remove',
   secretsHas: 'secrets:has',
   openBookFile: 'dialog:open-book-file',
+  saveText: 'files:save-text',
+  savePng: 'files:save-png',
   openExternal: 'shell:open-external',
   showDataDir: 'shell:show-data-dir',
   setTheme: 'theme:set',
@@ -47,8 +64,7 @@ export const ipcChannels = {
 
 /** Main ↔ Core（utilityProcess parentPort）控制消息 */
 export type MainToCore =
-  | { type: 'connect' }
-  | { type: 'secret:result'; id: number; value: string | null };
+  { type: 'connect' } | { type: 'secret:result'; id: number; value: string | null };
 
 export type CoreToMain =
   | { type: 'ready' }

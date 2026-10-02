@@ -1,7 +1,13 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { _electron as electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
+import {
+  _electron as electron,
+  expect,
+  test,
+  type ElectronApplication,
+  type Page,
+} from '@playwright/test';
 
 const shots = join(import.meta.dirname, '..', 'e2e-results', 'screenshots', process.platform);
 
@@ -10,16 +16,30 @@ let page: Page;
 let userDataDir: string;
 const errors: string[] = [];
 
+const accounts = {
+  admin: { username: 'admin', password: 'admin-pass-1', name: '超管老师', no: 'A0001' },
+  curator: { username: 'curator', password: 'curator-pass', name: '李同学', no: '2024010203' },
+  reviewer: { username: 'reviewer', password: 'reviewer-pass', name: '王老师', no: 'T9001' },
+};
+type Account = (typeof accounts)[keyof typeof accounts];
+
+test.describe.configure({ mode: 'serial' });
+
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(join(tmpdir(), 'yys-e2e-'));
   app = await electron.launch({
     args: [join(import.meta.dirname, '..', 'out', 'main', 'index.js')],
-    env: { ...process.env, YYS_USER_DATA_DIR: userDataDir, NODE_ENV: 'production' },
+    env: {
+      ...process.env,
+      YYS_USER_DATA_DIR: userDataDir,
+      YYS_E2E_SCRIPTED_MODEL: '1',
+      NODE_ENV: 'production',
+    },
   });
   page = await app.firstWindow();
   page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.setViewportSize({ width: 1360, height: 860 });
+  await page.setViewportSize({ width: 1440, height: 900 });
 });
 
 test.afterAll(async () => {
@@ -28,89 +48,208 @@ test.afterAll(async () => {
 });
 
 const shot = (name: string) => page.screenshot({ path: join(shots, `${name}.png`) });
+const nav = (name: string) =>
+  page
+    .getByRole('navigation')
+    .getByRole('button', { name: new RegExp(`^${name}`) })
+    .click();
+const dialog = () => page.getByRole('dialog');
 
-test('首页：标题、BYOK 引导与示例主题', async () => {
-  await expect(page.getByRole('heading', { name: '今天想策划什么主题的书展？' })).toBeVisible();
-  await expect(page.getByText('先添加一个模型服务商')).toBeVisible();
-  await expect(page.getByText('新生如何识别 AI 生成的信息')).toBeVisible();
-  await shot('01-home');
+async function register(account: Account): Promise<void> {
+  await page.getByRole('button', { name: '登录 / 注册' }).click();
+  const d = dialog();
+  const title = d.getByRole('heading', { name: /初始化|登录一页书展/ });
+  await expect(title).toBeVisible();
+  if ((await title.textContent())?.includes('登录'))
+    await d.getByRole('button', { name: '注册', exact: true }).click();
+  await d.getByLabel('用户名').fill(account.username);
+  await d.getByLabel('密码', { exact: true }).fill(account.password);
+  await d.getByLabel('确认密码').fill(account.password);
+  await d.getByLabel('姓名').fill(account.name);
+  await d.getByLabel('学号 / 工号').fill(account.no);
+  await d.getByRole('button', { name: /注册并登录|创建并登录/ }).click();
+  await expect(page.getByRole('button', { name: new RegExp(account.name) })).toBeVisible();
+}
+
+async function login(account: Account): Promise<void> {
+  await page.getByRole('button', { name: '登录 / 注册' }).click();
+  await expect(dialog().getByRole('heading', { name: '登录一页书展' })).toBeVisible();
+  await dialog().getByLabel('用户名').fill(account.username);
+  await dialog().getByLabel('密码', { exact: true }).fill(account.password);
+  await dialog().getByRole('button', { name: '登录', exact: true }).click();
+  await expect(page.getByRole('button', { name: new RegExp(account.name) })).toBeVisible();
+}
+
+async function logout(account: Account): Promise<void> {
+  await page.getByRole('button', { name: new RegExp(account.name) }).click();
+  await page.getByRole('menuitem', { name: '退出登录' }).click();
+  await expect(page.getByRole('button', { name: '登录 / 注册' })).toBeVisible();
+}
+
+async function openExhibition(): Promise<void> {
+  await nav('策展');
+  await page
+    .getByRole('button', { name: /真假之间/ })
+    .first()
+    .click();
+}
+
+test('首页：还没有上线的书展时展示流程介绍', async () => {
+  await expect(page.getByRole('heading', { name: '还没有上线的书展' })).toBeVisible();
+  await shot('01-home-empty');
 });
 
-test('书库：示例书库已灌入，两字关键词可检索', async () => {
-  await page.getByRole('button', { name: '书库', exact: true }).click();
-  await expect(page.getByText('共 28 本')).toBeVisible();
-  await page.getByPlaceholder('按书名、作者、主题词、摘要检索').fill('算法');
-  // 示例书库中《算法霸权》有一条刻意保留的重复记录
-  await expect(page.getByText('共 2 本')).toBeVisible();
-  await expect(page.getByRole('cell', { name: /算法霸权：数学杀伤性武器的威胁/ })).toBeVisible();
-  await shot('02-library');
-  await page.getByPlaceholder('按书名、作者、主题词、摘要检索').fill('');
-});
-
-test('书库：粘贴导入生成新的来源', async () => {
-  await page.getByRole('button', { name: '导入书目' }).click();
-  await page.getByRole('menuitem', { name: '粘贴文本' }).click();
-  await page.getByLabel('来源名称').fill('学院资料室');
-  await page.getByLabel('书目内容').fill('《乡土中国》费孝通\n思考，快与慢 / 丹尼尔·卡尼曼 / 中信出版社');
-  await page.getByRole('button', { name: '导入', exact: true }).click();
-  await expect(page.getByText('已导入 2 本到“学院资料室”')).toBeVisible();
-  await shot('03-import-report');
-  await page.getByRole('button', { name: '完成' }).click();
-  await expect(page.getByText('共 30 本')).toBeVisible();
-});
-
-test('设置：服务商选择与表单', async () => {
-  await page.getByRole('button', { name: /^设置/ }).click();
-  await expect(page.getByText('还没有配置模型')).toBeVisible();
-  await page.getByRole('button', { name: '添加服务商' }).click();
-  await expect(page.getByText('国内服务商')).toBeVisible();
-  await shot('04-provider-presets');
-  await page.getByRole('button', { name: /DeepSeek 深度求索/ }).click();
-  await expect(page.getByText('前往 DeepSeek 深度求索 获取 Key')).toBeVisible();
-  await shot('05-provider-form');
+test('初始化：第一个账号成为超级管理员，并配置共享模型', async () => {
+  await page.getByRole('button', { name: '登录 / 注册' }).click();
+  await expect(dialog().getByText('初始化：创建超级管理员')).toBeVisible();
+  await shot('02-setup');
   await page.keyboard.press('Escape');
-});
+  await register(accounts.admin);
+  await expect(page.getByText('超级管理员', { exact: true })).toBeVisible();
 
-test('设置：学校与馆藏', async () => {
-  await page.getByRole('button', { name: '学校与馆藏' }).click();
-  await expect(page.getByText('校园馆藏数据库')).toBeVisible();
-  await shot('06-school');
-});
-
-test('对话：未配置模型时给出可操作的错误', async () => {
-  await page.getByRole('button', { name: '新建书展', exact: true }).click();
-  await page.getByPlaceholder('描述主题、目标读者、活动时间与场地…').fill('帮我找几本关于批判性思维的书');
-  await page.keyboard.press('Enter');
-  await expect(page.getByText('还没有选择主模型')).toBeVisible();
-  await expect(page.getByText('活动包', { exact: true })).toBeVisible();
-  // 即使模型未配置，问题也已保存为书展任务
-  await expect(page.getByRole('button', { name: '帮我找几本关于批判性思维的书' })).toBeVisible();
-  await shot('07-chat-no-model');
-});
-
-test('深色模式', async () => {
   await page.getByRole('button', { name: /^设置/ }).click();
-  await page.getByRole('button', { name: '外观' }).click();
-  await page.getByRole('button', { name: '深色' }).click();
-  await expect(page.locator('html')).toHaveClass(/dark/);
-  await page.getByRole('button', { name: '书库', exact: true }).click();
-  await page.waitForTimeout(300);
-  await shot('08-library-dark');
+  await page.getByRole('button', { name: '模型与密钥' }).click();
+  await page.getByRole('button', { name: '添加服务商' }).first().click();
+  await dialog()
+    .getByRole('button', { name: /Ollama/ })
+    .click();
+  await dialog()
+    .getByPlaceholder(/手动填写模型名称/)
+    .fill('qwen3');
+  await dialog().getByRole('button', { name: '添加', exact: true }).click();
+  await dialog().getByText('共享给全部用户').click();
+  await dialog().getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText('全员共享')).toBeVisible();
+  await logout(accounts.admin);
 });
 
-test('后台服务被强制结束后自动重启，界面自动重连', async () => {
+test('注册策展人与审批人，超级管理员分配审批权限', async () => {
+  await register(accounts.curator);
+  await expect(page.getByText('普通用户', { exact: true })).toBeVisible();
+  // 普通用户看不到审批与管理入口
+  await expect(page.getByRole('navigation').getByRole('button', { name: /^审批/ })).toHaveCount(0);
+  await logout(accounts.curator);
+  await register(accounts.reviewer);
+  await logout(accounts.reviewer);
+
+  await login(accounts.admin);
+  await nav('管理');
+  await page.getByLabel(`${accounts.reviewer.name} 的角色`).selectOption('approver');
+  await expect(page.getByText('角色已更新')).toBeVisible();
+  await shot('03-admin-users');
+  await logout(accounts.admin);
+});
+
+test('策展人：填写需求 → 智能体策展 → 核对清单', async () => {
+  await login(accounts.curator);
+  await nav('策展');
+  await page.getByRole('button', { name: '发起策展' }).first().click();
+  const d = dialog();
+  await d.getByLabel('主题').fill('新生如何识别 AI 生成的信息');
+  await d.getByLabel('目标读者').fill('大一新生');
+  await d.getByLabel('活动日期').fill('2026-11-15');
+  await d.getByLabel('活动时间').fill('14:00–15:00');
+  await d.getByLabel('场地').fill('图书馆一楼大厅');
+  await d.getByLabel('期望书目数量').fill('8');
+  await d.getByRole('button', { name: '创建并开始策展' }).click();
+
+  await expect(page.getByText('核对清单', { exact: true })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText(/来自示例书库/).first()).toBeVisible();
+  await expect(page.getByText('策展完成：8 本书')).toBeVisible();
+  await shot('04-review');
+});
+
+test('策展人：确认方案 → 生成策展申请书 → 提交立项审批', async () => {
+  await page.getByRole('button', { name: '确认无误，生成策展申请书' }).click();
+  await expect(page.getByText('主题书展策展申请书')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('cell', { name: /李同学（学号\/工号：2024010203）/ })).toBeVisible();
+  await shot('05-proposal');
+  await page.getByRole('button', { name: '提交立项审批' }).click();
+  await expect(page.getByText('立项审批中').first()).toBeVisible();
+  await logout(accounts.curator);
+});
+
+test('审批人：同意立项', async () => {
+  await login(accounts.reviewer);
+  await nav('审批');
+  await page.getByRole('button', { name: /立项审批.*真假之间/ }).click();
+  await page.getByPlaceholder(/填写意见/).fill('选题贴合新生需求，同意立项。');
+  await shot('06-approve-proposal');
+  await page.getByRole('button', { name: '同意', exact: true }).click();
+  await expect(page.getByText('立项审批：同意', { exact: true })).toBeVisible();
+  await logout(accounts.reviewer);
+});
+
+test('策展人：看到“同意”，生成海报与完整活动包并提交上线审批', async () => {
+  await login(accounts.curator);
+  await openExhibition();
+  await page.getByRole('button', { name: /立项审批/ }).click();
+  await expect(page.getByText('立项审批：同意', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '生成海报与完整活动包' }).click();
+  await expect(page.getByRole('button', { name: '导出 PNG' })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: '撞色' }).click();
+  await shot('07-package');
+  await page.getByRole('button', { name: '提交上线审批' }).click();
+  await expect(page.getByText('上线审批中').first()).toBeVisible();
+  await logout(accounts.curator);
+});
+
+test('审批人：同意上线，首页更新为最新一期', async () => {
+  await login(accounts.reviewer);
+  await nav('审批');
+  await page.getByRole('button', { name: /上线审批.*真假之间/ }).click();
+  await page.getByRole('button', { name: '同意', exact: true }).click();
+  await expect(page.getByText('上线审批：同意', { exact: true }).first()).toBeVisible();
+  await logout(accounts.reviewer);
+
+  await nav('首页');
+  await expect(page.getByText('最新一期')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '真假之间' })).toBeVisible();
+  await expect(page.getByText('图书馆一楼大厅').first()).toBeVisible();
+  await shot('08-home-published');
+});
+
+test('策展人：录入执行记录与反馈，生成复盘，首页展示活动成果', async () => {
+  await login(accounts.curator);
+  await openExhibition();
+  await page.getByRole('button', { name: /上线与反馈/ }).click();
+  await page.getByLabel('参与人数').fill('36');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await page
+    .getByPlaceholder(/每行一条反馈/)
+    .fill('5 案例讨论很有收获\n4分：希望多一些实操练习\n联系我 13812345678');
+  await page.getByRole('button', { name: '录入反馈' }).click();
+  await expect(page.getByText('［手机号已隐去］')).toBeVisible();
+  await page.getByRole('button', { name: '前往复盘' }).click();
+  await page.getByRole('button', { name: '生成复盘总结' }).click();
+  await expect(page.getByText('给下一期的建议（每行一条）')).toBeVisible({ timeout: 20_000 });
+  await shot('09-retro');
+
+  await nav('首页');
+  await expect(page.getByText('活动成果')).toBeVisible();
+  await expect(page.getByText('36', { exact: true })).toBeVisible();
+  await expect(page.getByText('4.5 / 5')).toBeVisible();
+  await page.getByText('活动成果').scrollIntoViewIfNeeded();
+  await shot('10-home-results');
+});
+
+test('后台服务被强制结束后自动重启，登录状态保持', async () => {
   const corePid = () =>
-    app.evaluate(({ app: electronApp }) => electronApp.getAppMetrics().find((m) => m.type === 'Utility' && m.name === 'YiyeShuzhan Core')?.pid);
+    app.evaluate(
+      ({ app: electronApp }) =>
+        electronApp
+          .getAppMetrics()
+          .find((m) => m.type === 'Utility' && m.name === 'YiyeShuzhan Core')?.pid,
+    );
   const before = await corePid();
   expect(before).toBeTruthy();
   process.kill(before!, 'SIGKILL');
-
   await expect.poll(corePid, { timeout: 15_000 }).not.toBe(before);
-  await expect(page.getByText('正在自动恢复', { exact: false })).toBeHidden({ timeout: 15_000 });
-
-  await page.getByRole('button', { name: '新建书展', exact: true }).click();
-  await page.getByRole('button', { name: '书库', exact: true }).click();
-  await expect(page.getByText('共 30 本')).toBeVisible();
+  await nav('策展');
+  await expect(page.getByRole('button', { name: /真假之间/ }).first()).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByRole('button', { name: new RegExp(accounts.curator.name) })).toBeVisible();
 });
 
 test('没有控制台错误', () => {

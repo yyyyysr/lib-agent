@@ -16,7 +16,13 @@ export function installMenu(): void {
     {
       label: '显示',
       submenu: [
-        ...(isDev ? ([{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }] as MenuItemConstructorOptions[]) : []),
+        ...(isDev
+          ? ([
+              { role: 'reload' },
+              { role: 'toggleDevTools' },
+              { type: 'separator' },
+            ] as MenuItemConstructorOptions[])
+          : []),
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },

@@ -50,7 +50,9 @@ export class AppDatabase {
       return result;
     } catch (error) {
       this.depth--;
-      this.raw.exec(this.depth === 0 ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`);
+      this.raw.exec(
+        this.depth === 0 ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}; RELEASE ${savepoint}`,
+      );
       throw error;
     }
   }

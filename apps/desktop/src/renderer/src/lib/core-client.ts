@@ -5,6 +5,7 @@ import type {
   RpcMethod,
   RpcParams,
   RpcResult,
+  StreamChunks,
   StreamMethod,
   StreamParams,
   WireMessage,
@@ -41,6 +42,18 @@ class CoreClient {
   private readonly topicListeners = new Map<string, Set<(payload: unknown) => void>>();
   private readonly connectListeners = new Set<() => void>();
   private started = false;
+  private token: string | null = null;
+  private onUnauthorized: (() => void) | null = null;
+
+  /** 登录会话令牌：之后的每个请求都会携带 */
+  setToken(token: string | null): void {
+    this.token = token;
+  }
+
+  /** 会话失效（过期、被停用、在别处退出）时回调，用于跳转登录 */
+  handleUnauthorized(listener: () => void): void {
+    this.onUnauthorized = listener;
+  }
 
   start(): void {
     if (this.started) return;
@@ -85,8 +98,10 @@ class CoreClient {
         const pending = this.pending.get(message.id);
         if (!pending) return;
         this.pending.delete(message.id);
-        if (message.error) pending.reject(new CoreError(message.error));
-        else pending.resolve(message.result);
+        if (message.error) {
+          if (message.error.code === 'unauthorized' && this.token) this.onUnauthorized?.();
+          pending.reject(new CoreError(message.error));
+        } else pending.resolve(message.result);
         return;
       }
       case 'chunk':
@@ -108,20 +123,27 @@ class CoreClient {
     }
   }
 
-  call<M extends RpcMethod>(method: M, ...args: RpcParams<M> extends void ? [] : [RpcParams<M>]): Promise<RpcResult<M>> {
+  call<M extends RpcMethod>(
+    method: M,
+    ...args: RpcParams<M> extends void ? [] : [RpcParams<M>]
+  ): Promise<RpcResult<M>> {
     const id = ++this.seq;
     return new Promise<RpcResult<M>>((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
-      this.send({ kind: 'req', id, method, params: args[0] });
+      this.send({ kind: 'req', id, method, params: args[0], token: this.token ?? undefined });
     });
   }
 
-  stream<M extends StreamMethod>(method: M, params: StreamParams<M>, signal?: AbortSignal): ReadableStream<unknown> {
+  stream<M extends StreamMethod>(
+    method: M,
+    params: StreamParams<M>,
+    signal?: AbortSignal,
+  ): ReadableStream<StreamChunks[M]> {
     const id = ++this.seq;
-    return new ReadableStream<unknown>({
+    return new ReadableStream<StreamChunks[M]>({
       start: (controller) => {
-        this.streams.set(id, controller);
-        this.send({ kind: 'stream', id, method, params });
+        this.streams.set(id, controller as ReadableStreamDefaultController<unknown>);
+        this.send({ kind: 'stream', id, method, params, token: this.token ?? undefined });
         signal?.addEventListener(
           'abort',
           () => {

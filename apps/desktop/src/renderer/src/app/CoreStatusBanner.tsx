@@ -14,7 +14,8 @@ export function CoreStatusBanner() {
   if (status.state === 'restarting') {
     return (
       <div className="flex items-center justify-center gap-2 bg-warning-soft px-4 py-1.5 text-xs text-warning">
-        <Loader2 className="size-3.5 animate-spin" /> {status.reason}，正在自动恢复（第 {status.attempt} 次）…
+        <Loader2 className="size-3.5 animate-spin" /> {status.reason}，正在自动恢复（第{' '}
+        {status.attempt} 次）…
       </div>
     );
   }

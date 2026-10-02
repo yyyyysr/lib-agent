@@ -7,7 +7,18 @@ const utf8 = (text: string): Uint8Array => new TextEncoder().encode(text);
 
 describe('suggestMapping', () => {
   it('识别常见中文表头', () => {
-    const { mapping, unmappedHeaders } = suggestMapping(['题名', '责任者', '出版社', '出版年', 'ISBN', '索书号', '馆藏地', '内容简介', '链接', '备注']);
+    const { mapping, unmappedHeaders } = suggestMapping([
+      '题名',
+      '责任者',
+      '出版社',
+      '出版年',
+      'ISBN',
+      '索书号',
+      '馆藏地',
+      '内容简介',
+      '链接',
+      '备注',
+    ]);
     expect(mapping).toMatchObject({
       title: '题名',
       authors: '责任者',
@@ -31,7 +42,12 @@ describe('suggestMapping', () => {
 
   it('识别英文表头', () => {
     const { mapping } = suggestMapping(['Title', 'Author', 'Call Number', 'URL']);
-    expect(mapping).toMatchObject({ title: 'Title', authors: 'Author', callNumber: 'Call Number', sourceUrl: 'URL' });
+    expect(mapping).toMatchObject({
+      title: 'Title',
+      authors: 'Author',
+      callNumber: 'Call Number',
+      sourceUrl: 'URL',
+    });
   });
 });
 
@@ -67,14 +83,16 @@ describe('parseImport', () => {
       isSample: false,
     });
     expect(first?.provenance.title).toEqual({ origin: 'import', at, verified: false });
-    expect(result.issues.map((issue) => issue.message).join('\n')).toMatch(/ISBN 位数不正确[\s\S]*链接格式无法识别/);
+    expect(result.issues.map((issue) => issue.message).join('\n')).toMatch(
+      /ISBN 位数不正确[\s\S]*链接格式无法识别/,
+    );
   });
 
   it('CSV：GB18030 编码自动识别', async () => {
     // "书名,作者\n乡土中国,费孝通" 的 GBK 编码
     const gbk = Uint8Array.from([
-      0xca, 0xe9, 0xc3, 0xfb, 0x2c, 0xd7, 0xf7, 0xd5, 0xdf, 0x0a, 0xcf, 0xe7, 0xcd, 0xc1, 0xd6, 0xd0, 0xb9, 0xfa, 0x2c,
-      0xb7, 0xd1, 0xd0, 0xa2, 0xcd, 0xa8,
+      0xca, 0xe9, 0xc3, 0xfb, 0x2c, 0xd7, 0xf7, 0xd5, 0xdf, 0x0a, 0xcf, 0xe7, 0xcd, 0xc1, 0xd6,
+      0xd0, 0xb9, 0xfa, 0x2c, 0xb7, 0xd1, 0xd0, 0xa2, 0xcd, 0xa8,
     ]);
     const result = await parseImport({ bytes: gbk, fileName: 'export.csv' }, at);
     expect(result.encoding).toBe('gb18030');
@@ -82,7 +100,11 @@ describe('parseImport', () => {
   });
 
   it('TXT：每行一本书的自由格式', async () => {
-    const txt = ['1. 《乡土中国》费孝通', '2、思考，快与慢 / 丹尼尔·卡尼曼 / 中信出版社', '- 刻意练习 - 安德斯·艾利克森'].join('\n');
+    const txt = [
+      '1. 《乡土中国》费孝通',
+      '2、思考，快与慢 / 丹尼尔·卡尼曼 / 中信出版社',
+      '- 刻意练习 - 安德斯·艾利克森',
+    ].join('\n');
     const result = await parseImport({ text: txt, format: 'txt' }, at);
     expect(result.drafts.map((d) => [d.title, d.authors[0]])).toEqual([
       ['乡土中国', '费孝通'],
@@ -101,14 +123,28 @@ describe('parseImport', () => {
   it('JSON：嵌套在 data.items 中的数组，数组字段自动拼接', async () => {
     const json = JSON.stringify({
       code: 0,
-      data: { items: [{ title: '原则', author: ['瑞·达利欧'], keywords: ['管理', '决策'], url: 'https://x.edu/1' }] },
+      data: {
+        items: [
+          {
+            title: '原则',
+            author: ['瑞·达利欧'],
+            keywords: ['管理', '决策'],
+            url: 'https://x.edu/1',
+          },
+        ],
+      },
     });
     const result = await parseImport({ bytes: utf8(json), fileName: 'cms.json' }, at);
-    expect(result.drafts[0]).toMatchObject({ title: '原则', authors: ['瑞·达利欧'], subjects: ['管理', '决策'] });
+    expect(result.drafts[0]).toMatchObject({
+      title: '原则',
+      authors: ['瑞·达利欧'],
+      subjects: ['管理', '决策'],
+    });
   });
 
   it('JSON Lines', async () => {
-    const jsonl = '{"书名":"心流","作者":"米哈里·契克森米哈赖"}\n{"书名":"原则","作者":"瑞·达利欧"}';
+    const jsonl =
+      '{"书名":"心流","作者":"米哈里·契克森米哈赖"}\n{"书名":"原则","作者":"瑞·达利欧"}';
     const result = await parseImport({ bytes: utf8(jsonl), fileName: 'books.jsonl' }, at);
     expect(result.drafts).toHaveLength(2);
   });
@@ -117,7 +153,11 @@ describe('parseImport', () => {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('馆藏');
     sheet.addRow(['正题名', '著者', '馆藏链接']);
-    sheet.addRow(['终身成长', '卡罗尔·德韦克', { text: '查看', hyperlink: 'https://lib.example.edu/r/9' }]);
+    sheet.addRow([
+      '终身成长',
+      '卡罗尔·德韦克',
+      { text: '查看', hyperlink: 'https://lib.example.edu/r/9' },
+    ]);
     const buffer = new Uint8Array(await workbook.xlsx.writeBuffer());
     const result = await parseImport({ bytes: buffer, fileName: '馆藏.xlsx' }, at);
     expect(result.drafts[0]).toMatchObject({
@@ -134,23 +174,32 @@ describe('parseImport', () => {
     sheet.addRow([{ text: '乡土中国', hyperlink: 'https://cms.example.edu/b/23' }, '费孝通']);
     const buffer = new Uint8Array(await workbook.xlsx.writeBuffer());
     const result = await parseImport({ bytes: buffer, fileName: 'cms.xlsx' }, at);
-    expect(result.drafts[0]).toMatchObject({ title: '乡土中国', sourceUrl: 'https://cms.example.edu/b/23' });
+    expect(result.drafts[0]).toMatchObject({
+      title: '乡土中国',
+      sourceUrl: 'https://cms.example.edu/b/23',
+    });
     expect(result.mapping.sourceUrl).toBe('__cellLink');
   });
 
   it('旧版 .xls 给出明确提示', async () => {
     const xls = Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
-    await expect(parseImport({ bytes: xls, fileName: 'old.xlsx' }, at)).rejects.toMatchObject({ code: 'unsupported_format' });
+    await expect(parseImport({ bytes: xls, fileName: 'old.xlsx' }, at)).rejects.toMatchObject({
+      code: 'unsupported_format',
+    });
   });
 
   it('没有书名列时报错并列出识别到的表头', async () => {
-    await expect(parseImport({ bytes: utf8('编号,备注\n1,无'), fileName: 'x.csv' }, at)).rejects.toMatchObject({
+    await expect(
+      parseImport({ bytes: utf8('编号,备注\n1,无'), fileName: 'x.csv' }, at),
+    ).rejects.toMatchObject({
       code: 'import_failed',
       hint: expect.stringContaining('编号'),
     });
   });
 
   it('不支持的扩展名', async () => {
-    await expect(parseImport({ bytes: utf8(''), fileName: 'x.pdf' }, at)).rejects.toMatchObject({ code: 'unsupported_format' });
+    await expect(parseImport({ bytes: utf8(''), fileName: 'x.pdf' }, at)).rejects.toMatchObject({
+      code: 'unsupported_format',
+    });
   });
 });

@@ -14,8 +14,14 @@ export interface RemoteBookSource {
   readonly id: string;
   readonly kind: BookSourceKind;
   readonly name: string;
-  search(input: BookSearchInput, signal?: AbortSignal): Promise<Page<BookDraft & { externalId: string }>>;
-  fetchById?(externalId: string, signal?: AbortSignal): Promise<(BookDraft & { externalId: string }) | null>;
+  search(
+    input: BookSearchInput,
+    signal?: AbortSignal,
+  ): Promise<Page<BookDraft & { externalId: string }>>;
+  fetchById?(
+    externalId: string,
+    signal?: AbortSignal,
+  ): Promise<(BookDraft & { externalId: string }) | null>;
 }
 
 /** 解析后的二维表：表头 + 按表头取值的行 */

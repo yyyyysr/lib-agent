@@ -3,10 +3,11 @@ import { join } from 'node:path';
 import { net } from 'electron';
 import { openRepositories } from '@yys/db';
 import type { CoreToMain, MainToCore } from '@yys/shared';
+import { AuthService } from './auth';
 import { RpcServer, type PortLike } from './rpc-server';
 import { SecretsClient } from './secrets-client';
 import { seedSampleLibrary } from './seed';
-import { createServices } from './services';
+import { createServices } from './services/index';
 
 const parentPort = process.parentPort;
 if (!parentPort) throw new Error('Core 必须在 Electron utilityProcess 中运行');
@@ -35,12 +36,21 @@ const secrets = new SecretsClient(post);
 const appFetch: typeof globalThis.fetch = (input, init) =>
   net.fetch(input instanceof URL ? input.toString() : (input as string | Request), init);
 
+// E2E 测试使用脚本化模型；主进程只在未打包的开发构建中传入该变量
+const scriptedModel =
+  process.env.YYS_E2E_SCRIPTED_MODEL === '1'
+    ? (await import('@yys/agent-core/testing')).createScriptedModel().model
+    : null;
+
+const auth = new AuthService(repos);
 let server: RpcServer;
 const { handlers, streams } = createServices({
   repos,
+  auth,
   secrets,
   fetch: appFetch,
-  emit: (topic, payload) => server.emit(topic, payload as never),
+  createModel: scriptedModel ? () => scriptedModel : undefined,
+  emit: (topic, payload) => server.emit(topic, payload),
   info: {
     version: process.env.YYS_APP_VERSION ?? '0.0.0',
     dataDir,
@@ -49,7 +59,12 @@ const { handlers, streams } = createServices({
     coreStartedAt: new Date().toISOString(),
   },
 });
-server = new RpcServer(handlers, streams, (error) => console.error('[core] handler error', error));
+server = new RpcServer(
+  handlers,
+  streams,
+  (token) => auth.authenticate(token),
+  (error) => console.error('[core] handler error', error),
+);
 
 parentPort.on('message', (event) => {
   const message = event.data as MainToCore;

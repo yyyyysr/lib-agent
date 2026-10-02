@@ -22,7 +22,13 @@ describe('HttpJsonCampusSource', () => {
         data: {
           total: 41,
           list: [
-            { id: 'b1', name: '乡土中国', writer: '费孝通', holding: { callNo: 'C912/2' }, link: 'https://cms.example.edu/b1' },
+            {
+              id: 'b1',
+              name: '乡土中国',
+              writer: '费孝通',
+              holding: { callNo: 'C912/2' },
+              link: 'https://cms.example.edu/b1',
+            },
             { id: 'b2', name: '', writer: '缺书名' },
           ],
         },
@@ -36,13 +42,22 @@ describe('HttpJsonCampusSource', () => {
     expect((init?.headers as Record<string, string>).authorization).toBe('Bearer tok');
     expect(page.total).toBe(41);
     expect(page.items).toHaveLength(1);
-    expect(page.items[0]).toMatchObject({ externalId: 'b1', title: '乡土中国', authors: ['费孝通'], callNumber: 'C912/2' });
+    expect(page.items[0]).toMatchObject({
+      externalId: 'b1',
+      title: '乡土中国',
+      authors: ['费孝通'],
+      callNumber: 'C912/2',
+    });
     expect(page.items[0]?.provenance.title?.origin).toBe('api');
   });
 
   it('401 提示重新登录', async () => {
-    const source = new HttpJsonCampusSource(profile, { fetch: async () => new Response('', { status: 401 }) });
-    await expect(source.search({ text: 'x', limit: 10, offset: 0 })).rejects.toMatchObject({ code: 'not_configured' });
+    const source = new HttpJsonCampusSource(profile, {
+      fetch: async () => new Response('', { status: 401 }),
+    });
+    await expect(source.search({ text: 'x', limit: 10, offset: 0 })).rejects.toMatchObject({
+      code: 'not_configured',
+    });
   });
 
   it('未配置接口时拒绝创建', () => {

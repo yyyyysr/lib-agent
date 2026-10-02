@@ -17,13 +17,26 @@ export interface ProviderContext {
   fetch?: FetchFunction;
 }
 
-export function resolveProvider(config: ProviderConfig, apiKey: string | null, fetch?: FetchFunction): ProviderContext {
+export function resolveProvider(
+  config: ProviderConfig,
+  apiKey: string | null,
+  fetch?: FetchFunction,
+): ProviderContext {
   const preset = getPreset(config.presetId);
   if (!preset) throw new AppError('not_configured', `未知的服务商类型：${config.presetId}`);
   const baseURL = (config.baseURL?.trim() || preset.defaultBaseURL || '').replace(/\/+$/, '');
-  if (!baseURL) throw new AppError('not_configured', `${config.displayName} 缺少接口地址`, '请在设置中填写 Base URL');
+  if (!baseURL)
+    throw new AppError(
+      'not_configured',
+      `${config.displayName} 缺少接口地址`,
+      '请在设置中填写 Base URL',
+    );
   if (preset.requiresKey && !apiKey) {
-    throw new AppError('invalid_key', `${config.displayName} 尚未填写 API Key`, '请在 设置 › 模型与密钥 中填写');
+    throw new AppError(
+      'invalid_key',
+      `${config.displayName} 尚未填写 API Key`,
+      '请在 设置 › 模型与密钥 中填写',
+    );
   }
   return { config, preset, apiKey, baseURL, fetch };
 }
@@ -44,15 +57,30 @@ export function createLanguageModel(ctx: ProviderContext, modelId: string): Lang
     case 'deepseek':
       return createDeepSeek({ apiKey, baseURL, fetch })(modelId);
     case 'openai-compatible':
-      return createOpenAICompatible({ name: ctx.preset.id, apiKey, baseURL, fetch, includeUsage: true })(modelId);
+      return createOpenAICompatible({
+        name: ctx.preset.id,
+        apiKey,
+        baseURL,
+        fetch,
+        includeUsage: true,
+      })(modelId);
   }
 }
 
-const nonChatModel = /embed|whisper|tts|dall-?e|moderation|rerank|image|audio|speech|transcri|vision-preview|ocr/i;
+const nonChatModel =
+  /embed|whisper|tts|dall-?e|moderation|rerank|image|audio|speech|transcri|vision-preview|ocr/i;
 
-async function getJson(ctx: ProviderContext, url: string, headers: Record<string, string>, signal?: AbortSignal): Promise<unknown> {
+async function getJson(
+  ctx: ProviderContext,
+  url: string,
+  headers: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<unknown> {
   const doFetch = ctx.fetch ?? globalThis.fetch;
-  const response = await doFetch(url, { headers: { accept: 'application/json', ...headers }, signal });
+  const response = await doFetch(url, {
+    headers: { accept: 'application/json', ...headers },
+    signal,
+  });
   const text = await response.text();
   if (!response.ok) {
     throw new APICallError({
@@ -67,29 +95,48 @@ async function getJson(ctx: ProviderContext, url: string, headers: Record<string
 }
 
 /** 从服务商拉取可用模型列表；部分服务商不提供该接口时由用户手动填写 */
-export async function listRemoteModels(ctx: ProviderContext, signal?: AbortSignal): Promise<ModelInfo[]> {
+export async function listRemoteModels(
+  ctx: ProviderContext,
+  signal?: AbortSignal,
+): Promise<ModelInfo[]> {
   const key = ctx.apiKey ?? '';
   let ids: { id: string; label?: string }[];
   switch (ctx.preset.kind) {
     case 'anthropic': {
-      const json = (await getJson(ctx, `${ctx.baseURL}/models?limit=100`, { 'x-api-key': key, 'anthropic-version': '2023-06-01' }, signal)) as {
+      const json = (await getJson(
+        ctx,
+        `${ctx.baseURL}/models?limit=100`,
+        { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        signal,
+      )) as {
         data?: { id: string; display_name?: string }[];
       };
       ids = (json.data ?? []).map((m) => ({ id: m.id, label: m.display_name }));
       break;
     }
     case 'google': {
-      const json = (await getJson(ctx, `${ctx.baseURL}/models?pageSize=200`, { 'x-goog-api-key': key }, signal)) as {
+      const json = (await getJson(
+        ctx,
+        `${ctx.baseURL}/models?pageSize=200`,
+        { 'x-goog-api-key': key },
+        signal,
+      )) as {
         models?: { name: string; displayName?: string; supportedGenerationMethods?: string[] }[];
       };
       ids = (json.models ?? [])
-        .filter((m) => !m.supportedGenerationMethods || m.supportedGenerationMethods.includes('generateContent'))
+        .filter(
+          (m) =>
+            !m.supportedGenerationMethods ||
+            m.supportedGenerationMethods.includes('generateContent'),
+        )
         .map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName }));
       break;
     }
     default: {
       const headers: Record<string, string> = key ? { authorization: `Bearer ${key}` } : {};
-      const json = (await getJson(ctx, `${ctx.baseURL}/models`, headers, signal)) as { data?: { id: string }[] };
+      const json = (await getJson(ctx, `${ctx.baseURL}/models`, headers, signal)) as {
+        data?: { id: string }[];
+      };
       ids = (json.data ?? []).map((m) => ({ id: m.id }));
     }
   }

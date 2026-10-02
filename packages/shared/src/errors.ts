@@ -1,4 +1,9 @@
 export type AppErrorCode =
+  | 'unauthorized'
+  | 'forbidden'
+  | 'invalid_state'
+  | 'conflict'
+  | 'busy'
   | 'invalid_params'
   | 'not_found'
   | 'not_configured'

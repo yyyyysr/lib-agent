@@ -52,6 +52,8 @@ export const providerConfigSchema = z.object({
   hasKey: z.boolean(),
   models: z.array(modelInfoSchema),
   enabled: z.boolean(),
+  /** 所属用户；为空表示超级管理员共享给全部用户 */
+  ownerId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -63,6 +65,8 @@ export const providerInputSchema = providerConfigSchema
     id: z.string().optional(),
     /** 留空时使用服务商预设名称 */
     displayName: z.string().max(60).default(''),
+    /** 仅超级管理员可设为共享 */
+    shared: z.boolean().default(false),
   });
 export type ProviderInput = z.infer<typeof providerInputSchema>;
 

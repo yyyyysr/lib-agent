@@ -51,7 +51,9 @@ export function useRpc<M extends RpcMethod>(
 
   useEffect(() => {
     if (!enabled) return;
-    const offs = topicsKey ? topicsKey.split(',').map((topic) => core.on(topic as CoreEventTopic, reload)) : [];
+    const offs = topicsKey
+      ? topicsKey.split(',').map((topic) => core.on(topic as CoreEventTopic, reload))
+      : [];
     offs.push(core.onConnect(reload));
     return () => offs.forEach((off) => off());
   }, [topicsKey, enabled, reload]);
