@@ -1,0 +1,238 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/noto-sans-sc';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * 设计令牌：中性灰阶参照 ChatGPT，唯一强调色为"书香绿"。
+ * 字体随应用打包，不依赖系统字体，保证 macOS 与 Windows 显示一致。
+ */
+:root {
+  --bg: #ffffff;
+  --sidebar: #f9f9f9;
+  --surface: #f4f4f4;
+  --surface-2: #ececec;
+  --surface-hover: #ececec;
+  --border: #e5e5e5;
+  --border-strong: #d4d4d4;
+  --fg: #0d0d0d;
+  --muted: #5d5d5d;
+  --subtle: #8f8f8f;
+  --accent: #2f6f4f;
+  --accent-soft: #e8f2ec;
+  --accent-fg: #ffffff;
+  --danger: #c4320a;
+  --danger-soft: #fdf0ec;
+  --warning: #a15c07;
+  --warning-soft: #fdf6e7;
+  --success: #1f7a4d;
+  --overlay: rgb(0 0 0 / 0.35);
+  --titlebar-height: 48px;
+  --titlebar-inset-left: 0px;
+  --titlebar-inset-right: 0px;
+  color-scheme: light;
+}
+
+.dark {
+  --bg: #212121;
+  --sidebar: #181818;
+  --surface: #2a2a2a;
+  --surface-2: #303030;
+  --surface-hover: #2f2f2f;
+  --border: #353535;
+  --border-strong: #454545;
+  --fg: #ececec;
+  --muted: #b4b4b4;
+  --subtle: #8a8a8a;
+  --accent: #5fae86;
+  --accent-soft: #23362c;
+  --accent-fg: #0d1a13;
+  --danger: #ff7a59;
+  --danger-soft: #3a2420;
+  --warning: #e5a54b;
+  --warning-soft: #392f1f;
+  --success: #5fae86;
+  --overlay: rgb(0 0 0 / 0.6);
+  color-scheme: dark;
+}
+
+.platform-darwin {
+  --titlebar-inset-left: 76px;
+}
+.platform-win32,
+.platform-linux {
+  --titlebar-inset-right: 140px;
+}
+
+@theme inline {
+  --font-sans: 'Inter Variable', 'Noto Sans SC Variable', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', 'Consolas', monospace;
+  --color-bg: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-overlay: var(--overlay);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.6;
+    overflow: hidden;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  input,
+  textarea,
+  [data-selectable],
+  .prose-chat {
+    user-select: text;
+  }
+  button {
+    cursor: default;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  /* 统一滚动条：Windows 默认滚动条又粗又亮，与 macOS 观感差异最大 */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-strong);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--subtle);
+  }
+}
+
+@utility drag-region {
+  -webkit-app-region: drag;
+}
+@utility no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 对话正文排版 */
+.prose-chat {
+  line-height: 1.75;
+  word-break: break-word;
+}
+.prose-chat > * + * {
+  margin-top: 0.75em;
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3 {
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1.2em;
+}
+.prose-chat h1 {
+  font-size: 1.35em;
+}
+.prose-chat h2 {
+  font-size: 1.2em;
+}
+.prose-chat h3 {
+  font-size: 1.05em;
+}
+.prose-chat ul,
+.prose-chat ol {
+  padding-left: 1.4em;
+}
+.prose-chat ul {
+  list-style: disc;
+}
+.prose-chat ol {
+  list-style: decimal;
+}
+.prose-chat li + li {
+  margin-top: 0.3em;
+}
+.prose-chat a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-chat code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--surface);
+  border-radius: 6px;
+  padding: 0.1em 0.35em;
+}
+.prose-chat pre {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 12px 14px;
+  overflow-x: auto;
+}
+.prose-chat pre code {
+  background: none;
+  padding: 0;
+}
+.prose-chat blockquote {
+  border-left: 3px solid var(--border-strong);
+  padding-left: 0.9em;
+  color: var(--muted);
+}
+.prose-chat table {
+  border-collapse: collapse;
+  font-size: 0.93em;
+}
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.prose-chat strong {
+  font-weight: 600;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.text-shimmer {
+  background: linear-gradient(90deg, var(--subtle) 25%, var(--fg) 50%, var(--subtle) 75%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2s linear infinite;
+}

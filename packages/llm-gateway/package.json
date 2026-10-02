@@ -1,0 +1,22 @@
+{
+  "name": "@yys/llm-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "4.0.71",
+    "@ai-sdk/deepseek": "3.0.58",
+    "@ai-sdk/google": "4.0.87",
+    "@ai-sdk/openai": "4.0.83",
+    "@ai-sdk/openai-compatible": "3.0.62",
+    "@yys/shared": "workspace:*",
+    "ai": "7.0.127",
+    "zod": "4.6.5"
+  }
+}

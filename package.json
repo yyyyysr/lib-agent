@@ -1,0 +1,25 @@
+{
+  "name": "yiyeshuzhan",
+  "private": true,
+  "description": "一页书展：面向高校图书馆阅读推广的 AI 策展与运营智能体（桌面客户端）",
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @yys/desktop dev",
+    "build": "pnpm --filter @yys/desktop build",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dist:mac": "pnpm --filter @yys/desktop dist:mac",
+    "dist:win": "pnpm --filter @yys/desktop dist:win",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "prettier": "^3.6.0",
+    "typescript": "6.0.3",
+    "vitest": "5.0.3"
+  }
+}

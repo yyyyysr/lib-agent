@@ -1,0 +1,16 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  # Electron 44 在首次使用时下载二进制；CI 中用 install-electron 显式预下载
+  electron: true
+  esbuild: true
+  electron-winstaller: false
+
+minimumReleaseAgeExclude:
+  - '@ai-sdk/gateway@4.0.103'
+  - '@ai-sdk/mcp@2.0.66'
+  - '@ai-sdk/react@4.0.130'
+  - ai@7.0.127
+  - lucide-react@1.50.0
