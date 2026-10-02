@@ -199,6 +199,8 @@ export const checkCategoryLabels: Record<CheckItem['category'], string> = {
 /* ───────────── 策展申请书 ───────────── */
 
 export const proposalSchema = z.object({
+  /** 主办单位，生成时取自学校设置 */
+  organizer: z.string().default(''),
   title: z.string(),
   theme: z.string(),
   purpose: z.string(),

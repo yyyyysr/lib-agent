@@ -1,5 +1,6 @@
 import {
   ArrowLeft,
+  Landmark,
   BookOpen,
   CalendarDays,
   ExternalLink,
@@ -11,11 +12,13 @@ import {
 } from 'lucide-react';
 import { workflowSteps, type ShowcaseExhibition } from '@yys/shared';
 import { TopBar } from '../../app/TopBar';
+import { AppMark } from '../../components/AppMark';
 import { Poster } from '../../components/Poster';
 import { Badge, Button, EmptyState, Spinner } from '../../components/ui';
 import { cn } from '../../lib/cn';
 import { errorText } from '../../lib/core-client';
 import { countdown, formatDate, formatDateTime } from '../../lib/format';
+import { useBranding } from '../../lib/use-branding';
 import { useRpc } from '../../lib/use-rpc';
 import { useAppStore } from '../../store/app-store';
 import { useAuth } from '../../store/auth-store';
@@ -46,6 +49,7 @@ export function ShowcaseDetail({
   latest?: boolean;
 }) {
   const { brief, package: pkg } = exhibition;
+  const { organizer } = useBranding();
   const when = countdown(brief.eventDate);
   const allBooks = exhibition.sections.flatMap((s) => s.books);
   const hasResults =
@@ -61,6 +65,7 @@ export function ShowcaseDetail({
           poster={pkg.poster}
           brief={brief}
           bookTitles={allBooks.map((b) => b.book.title)}
+          organizer={organizer}
           scale={0.82}
         />
         <div className="min-w-0 flex-1 pt-2">
@@ -83,6 +88,7 @@ export function ShowcaseDetail({
                 '时间待定'}
             </InfoRow>
             <InfoRow icon={<MapPin className="size-4" />}>{brief.venue || '地点待定'}</InfoRow>
+            <InfoRow icon={<Landmark className="size-4" />}>主办：{organizer}</InfoRow>
             <InfoRow icon={<Users className="size-4" />}>面向 {brief.audience}</InfoRow>
             <InfoRow icon={<BookOpen className="size-4" />}>
               {allBooks.length} 本馆藏 · {exhibition.sections.length} 个展区 · 策展：
@@ -293,6 +299,7 @@ function PastExhibitions({ excludeId }: { excludeId?: string }) {
 
 function Welcome() {
   const navigate = useAppStore((s) => s.navigate);
+  const { organizer } = useBranding();
   const { user, openPrompt } = useAuth();
   return (
     <div className="mx-auto w-full max-w-[860px] px-8 py-12">
@@ -300,7 +307,7 @@ function Welcome() {
         <Sparkles className="size-6 text-accent" />
         <h1 className="mt-4 text-[28px] font-semibold tracking-tight">还没有上线的书展</h1>
         <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-muted">
-          一页书展帮助图书馆馆员与学生团队，围绕真实馆藏快速完成一场 8–12
+          一页书展帮助{organizer}馆员与学生团队，围绕真实馆藏快速完成一场 8–12
           本书的主题微书展：智能体负责选书、编排、撰写与检查，馆员核对，上级审批后在这里上线展示。
         </p>
         <div className="mt-6 flex gap-2">
@@ -340,12 +347,21 @@ function Welcome() {
 }
 
 export function HomeView() {
+  const { organizer } = useBranding();
   const { data, loading, error } = useRpc('showcase.latest', undefined, {
     topics: ['showcase.changed'],
   });
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <TopBar title="首页" />
+      <TopBar
+        title={
+          <>
+            <AppMark />
+            <span>一页书展</span>
+            <span className="text-[13px] font-normal text-subtle">{organizer} · 主题书展</span>
+          </>
+        }
+      />
       <div className="min-h-0 flex-1 overflow-y-auto">
         {loading && !data ? (
           <div className="flex h-full items-center justify-center">

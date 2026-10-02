@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nowIso } from '@yys/shared';
+import { DEFAULT_SCHOOL, nowIso, schoolProfileSchema } from '@yys/shared';
 import type { Repositories } from '@yys/db';
 import {
   SAMPLE_LIBRARY_VERSION,
@@ -9,6 +9,17 @@ import {
 } from '@yys/book-sources';
 
 const VERSION_KEY = 'sampleLibraryVersion';
+
+const SCHOOL_SEEDED_KEY = 'schoolSeeded';
+
+/** 首次启动时写入默认学校（中山大学）；之后超级管理员修改或清空都不再覆盖 */
+export function seedDefaultSchool(repos: Repositories): boolean {
+  if (repos.settings.get(SCHOOL_SEEDED_KEY, z.boolean(), false)) return false;
+  if (!repos.settings.get('schoolProfile', schoolProfileSchema.nullable(), null))
+    repos.settings.set('schoolProfile', DEFAULT_SCHOOL);
+  repos.settings.set(SCHOOL_SEEDED_KEY, true);
+  return true;
+}
 
 /** 首次启动或示例书库升级时重新灌入；用户自己的导入数据不受影响 */
 export function seedSampleLibrary(repos: Repositories): boolean {

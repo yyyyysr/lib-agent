@@ -14,7 +14,7 @@ import type {
 } from '@yys/shared';
 import { AuthService } from './auth';
 import { RpcServer, type PortLike } from './rpc-server';
-import { seedSampleLibrary } from './seed';
+import { seedDefaultSchool, seedSampleLibrary } from './seed';
 import { createServices } from './services/index';
 
 /** 内存中的端口：模拟 Renderer ↔ Core 的 MessagePort */
@@ -112,6 +112,7 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     dir = mkdtempSync(join(tmpdir(), 'yys-core-'));
     repos = openRepositories(join(dir, 'core.db'));
     seedSampleLibrary(repos);
+    seedDefaultSchool(repos);
     const { model } = createScriptedModel();
     vault = new Map<string, string>();
     const secrets = {
@@ -283,6 +284,32 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
       (await client.raw('auth.login', { username: 'curator', password: 'curator-pass' })).error
         ?.message,
     ).toContain('停用');
+  });
+
+  it('学校默认为中山大学：首页公开可读，修改后不再被默认值覆盖，申请书写入主办单位', async () => {
+    expect(await client.call('school.branding', undefined)).toEqual({
+      schoolName: '中山大学',
+      organizer: '中山大学图书馆',
+    });
+    await client.call(
+      'settings.setSchool',
+      { id: 'school_default', name: '示例大学图书馆' },
+      admin.token,
+    );
+    expect(seedDefaultSchool(repos)).toBe(false);
+    expect(await client.call('school.branding', undefined)).toEqual({
+      schoolName: '示例大学图书馆',
+      organizer: '示例大学图书馆',
+    });
+    expect(
+      (await client.raw('settings.setSchool', { id: 'x', name: 'x' }, curator.token)).error?.code,
+    ).toBe('forbidden');
+
+    const { id } = await client.call<ExhibitionDetail>('exhibitions.create', brief, curator.token);
+    await client.stream('agent.run', { id, task: 'curate' }, curator.token);
+    await client.stream('agent.run', { id, task: 'proposal' }, curator.token);
+    const detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, curator.token);
+    expect(detail.proposal?.organizer).toBe('示例大学图书馆');
   });
 
   it('非内置的超级管理员可以正常授予与撤销', async () => {

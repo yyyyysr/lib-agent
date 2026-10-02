@@ -6,7 +6,7 @@ import { BUILTIN_ADMIN, type CoreToMain, type MainToCore } from '@yys/shared';
 import { AuthService } from './auth';
 import { RpcServer, type PortLike } from './rpc-server';
 import { SecretsClient } from './secrets-client';
-import { seedSampleLibrary } from './seed';
+import { seedDefaultSchool, seedSampleLibrary } from './seed';
 import { createServices } from './services/index';
 
 const parentPort = process.parentPort;
@@ -29,6 +29,7 @@ mkdirSync(join(dataDir, 'data'), { recursive: true });
 
 const repos = openRepositories(join(dataDir, 'data', 'yiyeshuzhan.db'));
 if (seedSampleLibrary(repos)) console.log('[core] 示例书库已就绪');
+if (seedDefaultSchool(repos)) console.log('[core] 已写入默认学校：中山大学');
 
 const secrets = new SecretsClient(post);
 

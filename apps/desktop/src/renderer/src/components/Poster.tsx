@@ -24,7 +24,7 @@ interface PosterProps {
  * 固定 420×560（3:4），三种模板只改版式与配色。
  */
 export const Poster = forwardRef<HTMLDivElement, PosterProps>(function Poster(
-  { poster, brief, bookTitles, organizer = '图书馆阅读推广', scale = 1 },
+  { poster, brief, bookTitles, organizer = '中山大学图书馆', scale = 1 },
   ref,
 ) {
   const when =
@@ -38,7 +38,7 @@ export const Poster = forwardRef<HTMLDivElement, PosterProps>(function Poster(
         return (
           <div className="flex h-full flex-col bg-[#f4efe6] text-[#1b1b1b]">
             <div className="relative h-[230px] bg-[#c8553d] px-8 pt-9 text-white">
-              <p className="text-[12px] tracking-[0.3em] opacity-80">一页书展 · 主题微书展</p>
+              <p className="text-[12px] tracking-[0.3em] opacity-80">{organizer} · 一页书展</p>
               <p className="mt-3 text-[40px] leading-[1.1] font-bold">{poster.headline}</p>
               <p className="mt-2 text-[16px] font-medium opacity-90">{poster.subheadline}</p>
               <div className="absolute right-8 -bottom-6 rounded-full bg-[#1b1b1b] px-4 py-2 text-[13px] font-semibold text-white">
@@ -88,6 +88,7 @@ export const Poster = forwardRef<HTMLDivElement, PosterProps>(function Poster(
               <div className="space-y-0.5">
                 <p>{when}</p>
                 <p>{where}</p>
+                <p className="text-[#888]">{organizer}</p>
               </div>
               <p className="font-semibold">{poster.callToAction} →</p>
             </div>

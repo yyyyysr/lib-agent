@@ -32,7 +32,12 @@ import {
   type ProviderConfig,
   type ProviderPreset,
 } from './provider';
-import { schoolProfileSchema, type CampusConnectionStatus, type SchoolProfile } from './school';
+import {
+  schoolProfileSchema,
+  type CampusConnectionStatus,
+  type SchoolBranding,
+  type SchoolProfile,
+} from './school';
 import {
   loginInputSchema,
   passwordSchema,
@@ -185,6 +190,7 @@ export const rpcParamSchemas = {
   'settings.setSchool': schoolProfileSchema.nullable(),
 
   'campus.status': z.void(),
+  'school.branding': z.void(),
 
   'books.sources': z.void(),
   'books.search': bookQuerySchema,
@@ -246,6 +252,7 @@ export interface RpcResults {
   'settings.getSchool': SchoolProfile | null;
   'settings.setSchool': SchoolProfile | null;
   'campus.status': CampusConnectionStatus;
+  'school.branding': SchoolBranding;
   'books.sources': BookSourceInfo[];
   'books.search': Page<BookRecord>;
   'books.importFile': ImportReport;
@@ -309,6 +316,7 @@ export const methodAccess = {
   'settings.getSchool': 'user',
   'settings.setSchool': 'superadmin',
   'campus.status': 'user',
+  'school.branding': 'public',
   'books.sources': 'user',
   'books.search': 'user',
   'books.importFile': 'user',
@@ -338,6 +346,7 @@ export interface CoreEvents {
   'books.changed': { sourceId?: string };
   'providers.changed': Record<string, never>;
   'users.changed': Record<string, never>;
+  'school.changed': Record<string, never>;
 }
 export type CoreEventTopic = keyof CoreEvents;
 

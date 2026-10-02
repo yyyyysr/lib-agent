@@ -5,6 +5,7 @@ import { Poster, posterTemplates } from '../../../components/Poster';
 import { EditableText, Panel } from '../../../components/workflow';
 import { Button, EmptyState } from '../../../components/ui';
 import { cn } from '../../../lib/cn';
+import { useBranding } from '../../../lib/use-branding';
 import { toast } from '../../../store/app-store';
 import { act, type StepProps } from '../actions';
 import { packageMarkdown } from '../export';
@@ -60,12 +61,14 @@ function PromotionFields({
 /** 审批人查看的只读版本 */
 export function PackagePreview({ detail }: { detail: ExhibitionDetail }) {
   const pkg = detail.package!;
+  const { organizer } = useBranding();
   return (
     <div className="flex gap-6">
       <Poster
         poster={pkg.poster}
         brief={detail.brief}
         bookTitles={detail.plan?.books.map((b) => b.book.title) ?? []}
+        organizer={organizer}
         scale={0.75}
       />
       <div className="min-w-0 flex-1 rounded-2xl border border-border p-5">
@@ -77,6 +80,7 @@ export function PackagePreview({ detail }: { detail: ExhibitionDetail }) {
 
 export function PackageStep({ detail, editable, run }: StepProps) {
   const posterRef = useRef<HTMLDivElement>(null);
+  const { organizer } = useBranding();
   const pkg = detail.package;
   const canEdit = editable && isEditable('package', detail.status);
   const canSubmit =
@@ -140,7 +144,9 @@ export function PackageStep({ detail, editable, run }: StepProps) {
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => void exportText(`${detail.title}-完整活动包.md`, packageMarkdown(detail))}
+          onClick={() =>
+            void exportText(`${detail.title}-完整活动包.md`, packageMarkdown(detail, organizer))
+          }
         >
           <Download className="size-3.5" /> 导出完整活动包
         </Button>
@@ -170,6 +176,7 @@ export function PackageStep({ detail, editable, run }: StepProps) {
               poster={pkg.poster}
               brief={detail.brief}
               bookTitles={detail.plan?.books.map((b) => b.book.title) ?? []}
+              organizer={organizer}
             />
             <div className="flex items-center gap-1.5">
               {posterTemplates.map((t) => (

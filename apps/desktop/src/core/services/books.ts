@@ -2,10 +2,13 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import {
   AppError,
+  DEFAULT_SCHOOL,
   nowIso,
+  organizerOf,
   schoolProfileSchema,
   type CampusConnectionStatus,
   type ImportReport,
+  type SchoolBranding,
   type UserInfo,
 } from '@yys/shared';
 import { parseImport, SAMPLE_SOURCE_ID, type ParsedImport } from '@yys/book-sources';
@@ -51,6 +54,14 @@ export function createBookServices(deps: CoreDeps) {
     };
   };
 
+  /** 学校名称未配置时默认显示中山大学 */
+  const branding = (): SchoolBranding => {
+    const schoolName =
+      repos.settings.get(SCHOOL_KEY, schoolProfileSchema.nullable(), null)?.name.trim() ||
+      DEFAULT_SCHOOL.name;
+    return { schoolName, organizer: organizerOf(schoolName) };
+  };
+
   const library: LibraryAccess = {
     count: (sourceIds) => repos.books.countIn(sourceIds),
     all: (sourceIds, limit) =>
@@ -70,6 +81,7 @@ export function createBookServices(deps: CoreDeps) {
     | 'settings.getSchool'
     | 'settings.setSchool'
     | 'campus.status'
+    | 'school.branding'
   > = {
     'books.sources': () => repos.books.listSources(),
     'books.search': (query) => repos.books.search(query),
@@ -109,8 +121,10 @@ export function createBookServices(deps: CoreDeps) {
     'settings.setSchool': (profile) => {
       if (profile) repos.settings.set(SCHOOL_KEY, profile);
       else repos.settings.delete(SCHOOL_KEY);
+      deps.emit('school.changed', {});
       return profile;
     },
+    'school.branding': branding,
     'campus.status': (): CampusConnectionStatus => {
       const profile = repos.settings.get(SCHOOL_KEY, schoolProfileSchema.nullable(), null);
       if (!profile) return { state: 'not_configured' };
@@ -119,5 +133,5 @@ export function createBookServices(deps: CoreDeps) {
     },
   };
 
-  return { handlers, library };
+  return { handlers, library, branding };
 }

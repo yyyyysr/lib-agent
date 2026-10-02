@@ -15,7 +15,14 @@ export function createServices(deps: CoreDeps): { handlers: RpcHandlers; streams
   const models = createModelServices(deps);
   const books = createBookServices(deps);
   const exhibitions = createExhibitionServices(deps, running);
-  const agent = createAgentServices(deps, running, exhibitions, models.resolveModel, books.library);
+  const agent = createAgentServices(
+    deps,
+    running,
+    exhibitions,
+    models.resolveModel,
+    books.library,
+    books.branding,
+  );
 
   return {
     handlers: {

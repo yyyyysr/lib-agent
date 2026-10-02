@@ -13,7 +13,9 @@ import {
   UserRound,
 } from 'lucide-react';
 import { roleLabels } from '@yys/shared';
+import schoolLogoDark from '../assets/sysu-logo-dark.png';
 import schoolLogo from '../assets/sysu-logo.png';
+import { AppMark } from '../components/AppMark';
 import {
   Badge,
   IconButton,
@@ -26,6 +28,7 @@ import {
 } from '../components/ui';
 import { cn } from '../lib/cn';
 import { formatShortcut } from '../lib/platform';
+import { useBranding } from '../lib/use-branding';
 import { useRpc } from '../lib/use-rpc';
 import { useAppStore, type View } from '../store/app-store';
 import { useAuth, useRole } from '../store/auth-store';
@@ -73,6 +76,7 @@ export function Sidebar() {
   const others = accounts.filter((a) => a.username.toLowerCase() !== user?.username.toLowerCase());
   const isApprover = useRole('approver');
   const isAdmin = useRole('superadmin');
+  const branding = useBranding();
   const go = (target: View) => () => navigate(target);
   const at = (name: View['name']): boolean => view.name === name;
 
@@ -88,15 +92,24 @@ export function Sidebar() {
       </div>
 
       <div className="px-4 pb-4">
-        {/* 校徽为深绿色，深色模式下垫浅色底保证对比度 */}
+        {/* 浅色模式用绿色校徽，深色模式换成白色版本 */}
         <img
           src={schoolLogo}
-          alt="中山大学"
+          alt={branding.schoolName}
           draggable={false}
-          className="h-9 w-auto select-none dark:rounded-md dark:bg-white dark:px-1.5 dark:py-1"
+          className="h-9 w-auto select-none dark:hidden"
         />
-        <p className="mt-3 text-[15px] leading-tight font-semibold">一页书展</p>
-        <p className="text-[11px] text-subtle">AI 策展与运营智能体</p>
+        <img
+          src={schoolLogoDark}
+          alt={branding.schoolName}
+          draggable={false}
+          className="hidden h-9 w-auto select-none dark:block"
+        />
+        <p className="mt-3 flex items-center gap-1.5 text-[15px] leading-tight font-semibold">
+          <AppMark size="sm" />
+          一页书展
+        </p>
+        <p className="mt-1 text-[11px] text-subtle">{branding.organizer} · AI 策展与运营智能体</p>
       </div>
 
       <nav className="space-y-0.5 px-2">

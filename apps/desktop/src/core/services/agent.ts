@@ -19,6 +19,7 @@ import {
   type AgentTask,
   type ExhibitionStatus,
   type PlanBook,
+  type SchoolBranding,
   type UserInfo,
 } from '@yys/shared';
 import type { ExhibitionRecord } from '@yys/db';
@@ -85,6 +86,7 @@ export function createAgentServices(
   exhibitions: ExhibitionServices,
   resolveModel: ResolveModel,
   library: LibraryAccess,
+  branding: () => SchoolBranding,
 ) {
   const { repos } = deps;
   const { owned, log, changed, find } = exhibitions;
@@ -180,6 +182,7 @@ export function createAgentServices(
             brief: record.brief,
             plan: record.plan!,
             applicant: user,
+            organizer: branding().organizer,
             signal,
           }),
         );
@@ -197,6 +200,7 @@ export function createAgentServices(
             plan: record.plan!,
             proposal: record.proposal!,
             approvalComment: approval?.comment,
+            organizer: branding().organizer,
             signal,
           }),
         );

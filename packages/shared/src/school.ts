@@ -40,6 +40,22 @@ export const schoolProfileSchema = z.object({
 });
 export type SchoolProfile = z.infer<typeof schoolProfileSchema>;
 
+/** 首次启动时的默认学校；超级管理员可在 设置 › 学校与馆藏 中修改 */
+export const DEFAULT_SCHOOL = {
+  id: 'school_default',
+  name: '中山大学',
+  portalUrl: 'https://library.sysu.edu.cn',
+} as const satisfies SchoolProfile;
+
+export interface SchoolBranding {
+  schoolName: string;
+  /** 主办单位，如“中山大学图书馆” */
+  organizer: string;
+}
+
+export const organizerOf = (schoolName: string): string =>
+  schoolName.includes('图书馆') ? schoolName : `${schoolName}图书馆`;
+
 export type CampusConnectionStatus =
   | { state: 'not_configured' }
   | { state: 'portal_only' }

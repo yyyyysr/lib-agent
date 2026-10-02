@@ -3,6 +3,7 @@ import { isEditable, type ExhibitionDetail, type Proposal } from '@yys/shared';
 import { EditableText } from '../../../components/workflow';
 import { Button, EmptyState } from '../../../components/ui';
 import { formatDate, formatDateTime } from '../../../lib/format';
+import { useBranding } from '../../../lib/use-branding';
 import { toast } from '../../../store/app-store';
 import { act, type StepProps } from '../actions';
 import { proposalMarkdown } from '../export';
@@ -28,6 +29,7 @@ export function ProposalDocument({
   proposal: Proposal;
   editable: boolean;
 }) {
+  const { organizer } = useBranding();
   const save = (patch: Partial<Proposal>) =>
     act('exhibitions.updateProposal', { id: detail.id, proposal: { ...proposal, ...patch } }).then(
       () => undefined,
@@ -41,7 +43,9 @@ export function ProposalDocument({
 
   return (
     <article className="rounded-2xl border border-border bg-bg p-8">
-      <p className="text-center text-xs tracking-[0.3em] text-subtle">主题书展策展申请书</p>
+      <p className="text-center text-xs tracking-[0.3em] text-subtle">
+        {proposal.organizer || organizer} · 主题书展策展申请书
+      </p>
       <h2 className="mt-2 text-center text-xl font-semibold">{proposal.title}</h2>
       <p className="mt-1 text-center text-xs text-subtle">
         生成于 {formatDateTime(proposal.generatedAt)}
@@ -102,6 +106,7 @@ export async function exportText(name: string, content: string): Promise<void> {
 
 export function ProposalStep({ detail, editable, run, goTo }: StepProps) {
   const { proposal } = detail;
+  const { organizer } = useBranding();
   if (!proposal) {
     return (
       <EmptyState
@@ -131,7 +136,10 @@ export function ProposalStep({ detail, editable, run, goTo }: StepProps) {
           size="sm"
           variant="ghost"
           onClick={() =>
-            void exportText(`${proposal.title}-策展申请书.md`, proposalMarkdown(proposal))
+            void exportText(
+              `${proposal.title}-策展申请书.md`,
+              proposalMarkdown(proposal, proposal.organizer || organizer),
+            )
           }
         >
           <Download className="size-3.5" /> 导出

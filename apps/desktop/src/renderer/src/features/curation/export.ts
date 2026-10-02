@@ -4,9 +4,11 @@ import { formatDate } from '../../lib/format';
 const when = (date: string, time: string): string =>
   [formatDate(date), time].filter(Boolean).join(' ') || '待定';
 
-export function proposalMarkdown(proposal: Proposal): string {
+export function proposalMarkdown(proposal: Proposal, organizer: string): string {
   return [
     `# 主题书展策展申请书：${proposal.title}`,
+    '',
+    `主办单位：${organizer}`,
     '',
     '| 项目 | 内容 |',
     '| --- | --- |',
@@ -37,12 +39,13 @@ export function proposalMarkdown(proposal: Proposal): string {
 }
 
 /** 完整活动包：策展说明、书单与导读、展示文案、活动流程、推广材料、核对清单、反馈问卷 */
-export function packageMarkdown(detail: ExhibitionDetail): string {
+export function packageMarkdown(detail: ExhibitionDetail, organizer: string): string {
   const { plan, package: pkg, brief, checks } = detail;
   if (!plan || !pkg) return '';
   const lines: string[] = [
     `# ${plan.title}${plan.subtitle ? `——${plan.subtitle}` : ''}`,
     '',
+    `- 主办：${organizer}`,
     `- 主题：${brief.theme}`,
     `- 面向：${brief.audience}`,
     `- 时间：${when(brief.eventDate, brief.eventTime)}`,

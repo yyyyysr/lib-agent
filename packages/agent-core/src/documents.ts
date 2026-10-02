@@ -41,7 +41,13 @@ const proposalTextSchema = z.object({
 
 export async function generateProposal(
   model: LanguageModel,
-  input: { brief: Brief; plan: Plan; applicant: UserInfo; signal?: AbortSignal },
+  input: {
+    brief: Brief;
+    plan: Plan;
+    applicant: UserInfo;
+    organizer?: string;
+    signal?: AbortSignal;
+  },
 ): Promise<Proposal> {
   const { brief, plan, applicant } = input;
   const text = await generateStructured({
@@ -50,11 +56,12 @@ export async function generateProposal(
     temperature: 0.5,
     signal: input.signal,
     schema: proposalTextSchema,
-    system: `你代表策展人撰写提交给图书馆负责人的《主题书展策展申请书》，语言正式、简洁。${FACT_RULES}`,
+    system: `你代表策展人撰写提交给${input.organizer || '图书馆'}负责人的《主题书展策展申请书》，语言正式、简洁。${FACT_RULES}`,
     prompt: `书展：${plan.title}${plan.subtitle ? `——${plan.subtitle}` : ''}\n主题：${brief.theme}\n目标读者：${brief.audience}\n活动目标：${plan.statement.goals}\n展区与书目：\n${planDigest(plan)}\n活动形式：${plan.activity.format}`,
   });
   const sectionTitle = new Map(plan.sections.map((s) => [s.id, s.title]));
   return {
+    organizer: input.organizer ?? '',
     title: plan.title,
     theme: brief.theme,
     audience: brief.audience,
@@ -105,6 +112,8 @@ export async function generatePackage(
     plan: Plan;
     proposal: Proposal;
     approvalComment?: string;
+    /** 主办单位，例如“中山大学图书馆”，推文与通知中会署名 */
+    organizer?: string;
     signal?: AbortSignal;
   },
 ): Promise<ActivityPackage> {
@@ -115,7 +124,7 @@ export async function generatePackage(
     temperature: 0.8,
     signal: input.signal,
     schema: packageTextSchema,
-    system: `你是图书馆阅读推广的宣传策划，为已立项的主题书展撰写海报文案、推文、报名介绍、校园通知和反馈问卷。文字要吸引${brief.audience}。${FACT_RULES}`,
+    system: `你是${input.organizer || '图书馆'}阅读推广的宣传策划，为已立项的主题书展撰写海报文案、推文、报名介绍、校园通知和反馈问卷。文字要吸引${brief.audience}。${input.organizer ? `推文与通知以“${input.organizer}”署名。` : ''}${FACT_RULES}`,
     prompt: `书展：${plan.title}${plan.subtitle ? `——${plan.subtitle}` : ''}\n主题：${brief.theme}\n总导语：${plan.introduction}\n展区与书目：\n${planDigest(plan)}\n活动形式：${plan.activity.format}\n活动环节：${plan.activity.segments.map((s) => s.title).join('、')}${
       input.approvalComment ? `\n立项审批意见：${input.approvalComment}` : ''
     }`,
