@@ -1,3 +1,4 @@
+import { crc32, deflateSync } from 'node:zlib';
 import { MockLanguageModelV4 } from 'ai/test';
 
 type CallOptions = Parameters<MockLanguageModelV4['doGenerate']>[0];
@@ -112,6 +113,10 @@ const defaults: Record<string, ScriptHandler> = {
     nextTime: ['增加动手核实练习'],
   }),
   rewrite: () => ({ text: '按要求改写后的内容。' }),
+  art_prompt: () => ({
+    prompt:
+      'A quiet university library at dusk, warm lamps over long wooden tables, a student opening a glowing book from which paper birds and fragments of light fly upward, soft teal and amber palette, calm empty sky in the upper third',
+  }),
   rewrite_activity: () => ({
     format: '导览',
     segments: [{ minutes: 30, title: '导览', description: '改写后' }],
@@ -124,6 +129,56 @@ const defaults: Record<string, ScriptHandler> = {
     selectionLogic: '选书',
   }),
 };
+
+/**
+ * 生成一张竖版渐变 PNG（含几个柔和的光斑），作为测试与演示用的“AI 画面”。
+ * 不依赖图像库：手写 PNG 编码，像素数据用 zlib 压缩。
+ */
+export function makeArtworkPng(width = 600, height = 800, seed = 1): Uint8Array {
+  const top = [24 + seed * 7, 60, 84];
+  const bottom = [214, 150 - seed * 5, 92];
+  const spots = [
+    { x: 0.7, y: 0.62, r: 0.22, c: [255, 220, 160] },
+    { x: 0.3, y: 0.78, r: 0.16, c: [170, 220, 210] },
+    { x: 0.55, y: 0.85, r: 0.12, c: [255, 245, 220] },
+  ];
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    const row = y * (width * 3 + 1);
+    raw[row] = 0;
+    for (let x = 0; x < width; x++) {
+      const t = y / height;
+      let rgb = top.map((c, i) => c + (bottom[i]! - c) * t);
+      for (const s of spots) {
+        const d = Math.hypot(x / width - s.x, (y / height - s.y) * (height / width));
+        const k = Math.max(0, 1 - d / s.r) ** 2 * 0.55;
+        rgb = rgb.map((c, i) => c + (s.c[i]! - c) * k);
+      }
+      rgb.forEach((c, i) => (raw[row + 1 + x * 3 + i] = Math.max(0, Math.min(255, Math.round(c)))));
+    }
+  }
+  const chunk = (type: string, data: Buffer): Buffer => {
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(body) >>> 0);
+    return Buffer.concat([len, body, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header.writeUInt8(8, 8); // 位深
+  header.writeUInt8(2, 9); // 真彩色 RGB
+  return new Uint8Array(
+    Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('IHDR', header),
+      chunk('IDAT', deflateSync(raw)),
+      chunk('IEND', Buffer.alloc(0)),
+    ]),
+  );
+}
 
 /** 按任务代号回答的脚本化模型；可按任务覆盖返回值，用于测试校验与重试路径 */
 export function createScriptedModel(overrides: Record<string, ScriptHandler> = {}) {

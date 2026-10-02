@@ -53,6 +53,9 @@ test.afterAll(async () => {
 });
 
 const shot = (name: string) => page.screenshot({ path: join(shots, `${name}.png`) });
+/** 等首页的渐显、数字滚动等过渡动画结束再截图 */
+const settled = () =>
+  page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'));
 const nav = (name: string) =>
   page
     .getByRole('navigation')
@@ -138,6 +141,38 @@ test('内置超级管理员：用初始账号登录并记住密码，配置共�
   await dialog().getByText('共享给全部用户').click();
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('全员共享')).toBeVisible();
+
+  // 生图模型单独接入，并测试生成
+  await page
+    .getByLabel('模型', { exact: true })
+    .selectOption({ label: 'Ollama（本地模型） · qwen3' });
+  await page.getByRole('button', { name: '测试生图' }).click();
+  await expect(page.getByAltText('测试生成的图片')).toBeVisible({ timeout: 20_000 });
+  await shot('02-image-model');
+});
+
+test('书库：实体书封面，点击条目展开详情，示例书链接可打开；可切换书架视图', async () => {
+  await nav('书库');
+  await expect(page.getByText('共 28 本')).toBeVisible();
+  const row = page.getByRole('button', { name: /思考，快与慢/ }).first();
+  await row.click();
+  await expect(row).toHaveAttribute('aria-expanded', 'true');
+  await expect(
+    page.getByRole('button', { name: 'https://book.douban.com/subject/10785583/' }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: '打开来源页面' })).toBeVisible();
+  await shot('03-library-detail');
+  await page.getByRole('button', { name: '书架' }).click();
+  await expect(page.getByRole('img', { name: '《乡土中国》' })).toBeVisible();
+  await shot('03-library-shelf');
+  await page
+    .getByRole('button', { name: /乡土中国/ })
+    .first()
+    .click();
+  await expect(dialog().getByRole('heading', { name: '书目详情' })).toBeVisible();
+  await dialog().getByRole('button', { name: '关闭' }).click();
+  await expect(dialog()).toHaveCount(0);
+  await page.getByRole('button', { name: '列表' }).click();
 });
 
 test('注册一律为普通用户；通过账号菜单切换，超级管理员分配审批权限', async () => {
@@ -204,7 +239,16 @@ test('策展人：看到“同意”，生成海报与完整活动包并提交�
   await expect(page.getByText('立项审批：同意', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '生成海报与完整活动包' }).click();
   await expect(page.getByRole('button', { name: '导出 PNG' })).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: '撞色' }).click();
+  await page.getByRole('button', { name: '国风水墨' }).click();
+  await page.getByRole('button', { name: 'AI 绘制画面' }).click();
+  await expect(page.getByRole('button', { name: '使用这张画面' })).toHaveCount(1, {
+    timeout: 20_000,
+  });
+  await expect(page.getByRole('button', { name: 'AI 画面', exact: true })).toHaveClass(/bg-fg/);
+  await page
+    .getByRole('img', { name: /^海报：/ })
+    .first()
+    .scrollIntoViewIfNeeded();
   await shot('07-package');
   await page.getByRole('button', { name: '提交上线审批' }).click();
   await expect(page.getByText('上线审批中').first()).toBeVisible();
@@ -221,7 +265,16 @@ test('审批人：同意上线，首页更新为最新一期', async () => {
   await expect(page.getByText('最新一期')).toBeVisible();
   await expect(page.getByRole('heading', { name: '真假之间' })).toBeVisible();
   await expect(page.getByText('图书馆一楼大厅').first()).toBeVisible();
+  // 海报悬停倾斜
+  await page.getByRole('img', { name: /^海报：/ }).hover({ position: { x: 60, y: 60 } });
+  await settled();
   await shot('08-home-published');
+  await page.getByRole('button', { name: '查看《AI 3.0》', exact: true }).click();
+  await expect(dialog().getByText('本期导读')).toBeVisible();
+  await settled();
+  await shot('08-home-book-detail');
+  await dialog().getByRole('button', { name: '关闭' }).click();
+  await expect(dialog()).toHaveCount(0);
 });
 
 test('策展人：录入执行记录与反馈，生成复盘，首页展示活动成果', async () => {
@@ -242,9 +295,10 @@ test('策展人：录入执行记录与反馈，生成复盘，首页展示活�
 
   await nav('首页');
   await expect(page.getByText('活动成果')).toBeVisible();
+  await page.getByText('活动成果').scrollIntoViewIfNeeded();
   await expect(page.getByText('36', { exact: true })).toBeVisible();
   await expect(page.getByText('4.5 / 5')).toBeVisible();
-  await page.getByText('活动成果').scrollIntoViewIfNeeded();
+  await settled();
   await shot('10-home-results');
 });
 

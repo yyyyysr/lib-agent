@@ -9,6 +9,7 @@ import {
 import type { AppErrorShape } from './errors';
 import {
   approvalKindSchema,
+  artStyles,
   briefSchema,
   checkItemSchema,
   executionSchema,
@@ -24,9 +25,11 @@ import {
   type ShowcaseExhibition,
 } from './exhibition';
 import {
+  imageModelRefSchema,
   modelRolesSchema,
   providerInputSchema,
   type ConnectionTestResult,
+  type ImageTestResult,
   type ModelInfo,
   type ModelRoles,
   type ProviderConfig,
@@ -140,6 +143,11 @@ export const rpcParamSchemas = {
     bookId: z.string(),
     instruction: z.string().max(300).default(''),
   }),
+  'poster.generateArt': z.object({
+    id: z.string(),
+    style: z.enum(artStyles),
+    instruction: z.string().trim().max(300).default(''),
+  }),
   'plan.rewrite': z.object({
     id: z.string(),
     target: z.enum(['introduction', 'statement', 'activity', 'section']),
@@ -183,6 +191,7 @@ export const rpcParamSchemas = {
   'providers.delete': id,
   'providers.listRemoteModels': z.object({ providerId: z.string() }),
   'providers.test': z.object({ providerId: z.string(), modelId: z.string() }),
+  'providers.testImage': imageModelRefSchema,
 
   'settings.getModelRoles': z.void(),
   'settings.setModelRoles': modelRolesSchema,
@@ -233,6 +242,7 @@ export interface RpcResults {
   'plan.replaceBook': ExhibitionDetail;
   'plan.regenerateGuide': ExhibitionDetail;
   'plan.rewrite': ExhibitionDetail;
+  'poster.generateArt': ExhibitionDetail;
   'feedback.add': ExhibitionDetail;
   'feedback.delete': ExhibitionDetail;
   'approvals.list': ApprovalRecord[];
@@ -247,6 +257,7 @@ export interface RpcResults {
   'providers.delete': void;
   'providers.listRemoteModels': ModelInfo[];
   'providers.test': ConnectionTestResult;
+  'providers.testImage': ImageTestResult;
   'settings.getModelRoles': ModelRoles;
   'settings.setModelRoles': ModelRoles;
   'settings.getSchool': SchoolProfile | null;
@@ -297,6 +308,7 @@ export const methodAccess = {
   'plan.replaceBook': 'user',
   'plan.regenerateGuide': 'user',
   'plan.rewrite': 'user',
+  'poster.generateArt': 'user',
   'feedback.add': 'user',
   'feedback.delete': 'user',
   'approvals.list': 'approver',
@@ -311,6 +323,7 @@ export const methodAccess = {
   'providers.delete': 'user',
   'providers.listRemoteModels': 'user',
   'providers.test': 'user',
+  'providers.testImage': 'user',
   'settings.getModelRoles': 'user',
   'settings.setModelRoles': 'user',
   'settings.getSchool': 'user',

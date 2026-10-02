@@ -3,5 +3,12 @@
   "compilerOptions": {
     "types": ["node", "electron-vite/node"]
   },
-  "include": ["electron.vite.config.ts", "playwright.config.ts", "e2e", "src/main", "src/preload", "src/core"]
+  "include": [
+    "electron.vite.config.ts",
+    "playwright.config.ts",
+    "e2e",
+    "src/main",
+    "src/preload",
+    "src/core"
+  ]
 }

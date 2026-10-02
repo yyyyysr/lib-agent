@@ -10,6 +10,8 @@ export {
 } from './curate';
 export {
   anonymize,
+  buildArtPrompt,
+  fallbackArtPrompt,
   feedbackMetrics,
   generatePackage,
   generateProposal,

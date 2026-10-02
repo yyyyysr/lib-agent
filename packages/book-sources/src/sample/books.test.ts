@@ -26,10 +26,11 @@ describe('示例书库', () => {
     expect(new Set(drafts.map((d) => d.externalId)).size).toBe(drafts.length);
   });
 
-  it('馆藏字段只使用"示例-"前缀与 example.edu 域名，不冒充真实馆藏', () => {
+  it('索书号带"示例-"前缀；每本书都有可打开的豆瓣读书页面链接', () => {
     for (const draft of drafts) {
       if (draft.callNumber) expect(draft.callNumber.startsWith('示例-')).toBe(true);
-      if (draft.sourceUrl) expect(draft.sourceUrl).toContain('library.example.edu');
+      expect(draft.sourceUrl, draft.title).toMatch(/^https:\/\/book\.douban\.com\/subject\/\d+\/$/);
+      expect(cleanUrl(draft.sourceUrl!).valid).toBe(true);
     }
   });
 
@@ -37,7 +38,6 @@ describe('示例书库', () => {
     const byId = new Map(drafts.map((d) => [d.externalId, d]));
     expect(assessCompleteness(byId.get('sample-0012')!).missingRecommended).toContain('callNumber');
     expect(assessCompleteness(byId.get('sample-0015')!).missingRecommended).toContain('summary');
-    expect(cleanUrl(byId.get('sample-0026')!.sourceUrl!).valid).toBe(false);
     expect(dedupeKey(byId.get('sample-0028')!)).not.toBe(dedupeKey(byId.get('sample-0003')!));
     expect(byId.get('sample-0028')!.callNumber).toBe(byId.get('sample-0003')!.callNumber);
   });

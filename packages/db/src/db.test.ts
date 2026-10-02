@@ -63,12 +63,16 @@ describe('db', () => {
   });
 
   it('settings：不符合 schema 的旧数据回退到默认值', () => {
-    const fallback = { primary: null, fast: null };
+    const fallback = { primary: null, fast: null, image: null };
     repos.settings.set('modelRoles', { primary: 'broken' });
     expect(repos.settings.get('modelRoles', modelRolesSchema, fallback)).toEqual(fallback);
+    // 旧版本保存的分工没有 image 字段，读取时补为 null
     const valid = { primary: { providerId: 'p', modelId: 'm' }, fast: null };
     repos.settings.set('modelRoles', valid);
-    expect(repos.settings.get('modelRoles', modelRolesSchema, fallback)).toEqual(valid);
+    expect(repos.settings.get('modelRoles', modelRolesSchema, fallback)).toEqual({
+      ...valid,
+      image: null,
+    });
   });
 
   describe('books', () => {

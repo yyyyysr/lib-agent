@@ -5,12 +5,14 @@ import {
   newId,
   nowIso,
   secretRefForProvider,
+  type ImageModelRef,
   type ModelInfo,
   type ModelRoles,
   type ProviderConfig,
   type UserInfo,
 } from '@yys/shared';
 import {
+  createImageGenerator,
   createLanguageModel,
   getPreset,
   listRemoteModels,
@@ -22,12 +24,15 @@ import {
 import type { RpcHandlers } from '../rpc-server';
 import type { CoreDeps } from './context';
 
-const emptyRoles: ModelRoles = { primary: null, fast: null };
+const emptyRoles: ModelRoles = { primary: null, fast: null, image: null };
+const TEST_IMAGE_PROMPT =
+  'A simple, elegant watercolor illustration of an open book on a wooden desk beside a window, soft morning light, calm colors. No text, no letters, no watermark.';
 const rolesKey = (userId: string): string => `modelRoles:${userId}`;
 
 export function createModelServices(deps: CoreDeps) {
   const { repos, secrets } = deps;
   const createModel = deps.createModel ?? createLanguageModel;
+  const createImageGen = deps.createImageGenerator ?? createImageGenerator;
 
   const accessible = (user: UserInfo, id: string): ProviderConfig => {
     const config = repos.providers.get(id);
@@ -89,6 +94,39 @@ export function createModelServices(deps: CoreDeps) {
     );
   }
 
+  /**
+   * 生图模型：先用用户自己选定的；没有时使用超级管理员配置在共享服务商上的生图模型。
+   */
+  async function resolveImageGenerator(user: UserInfo) {
+    const candidates: ImageModelRef[] = [];
+    const own = getRoles(user).image;
+    if (own) candidates.push(own);
+    for (const admin of repos.users.list()) {
+      if (admin.role !== 'superadmin' || admin.status !== 'active' || admin.id === user.id)
+        continue;
+      const ref = getRoles(admin).image;
+      if (ref && repos.providers.get(ref.providerId)?.ownerId === null) candidates.push(ref);
+    }
+    for (const ref of candidates) {
+      const config = repos.providers.get(ref.providerId);
+      if (!config?.enabled || (config.ownerId !== null && config.ownerId !== user.id)) continue;
+      try {
+        const ctx = await providerContext(config);
+        return {
+          generate: createImageGen(ctx, ref.modelId, ref.mode),
+          label: `${config.displayName} · ${ref.modelId}`,
+        };
+      } catch {
+        // 缺 Key 或地址的服务商跳过
+      }
+    }
+    throw new AppError(
+      'no_model',
+      '还没有配置生图模型',
+      '请在 设置 › 模型与密钥 › 模型分工 中选择“生图模型”，或请超级管理员在共享服务商上配置',
+    );
+  }
+
   const handlers: Pick<
     RpcHandlers,
     | 'providers.presets'
@@ -97,6 +135,7 @@ export function createModelServices(deps: CoreDeps) {
     | 'providers.delete'
     | 'providers.listRemoteModels'
     | 'providers.test'
+    | 'providers.testImage'
     | 'settings.getModelRoles'
     | 'settings.setModelRoles'
   > = {
@@ -139,6 +178,7 @@ export function createModelServices(deps: CoreDeps) {
         repos.settings.set(rolesKey(user.id), {
           primary: roles.primary?.providerId === id ? null : roles.primary,
           fast: roles.fast?.providerId === id ? null : roles.fast,
+          image: roles.image?.providerId === id ? null : roles.image,
         });
       });
       secrets.remove(config.secretRef);
@@ -176,14 +216,29 @@ export function createModelServices(deps: CoreDeps) {
       }
       return result;
     },
+    'providers.testImage': async ({ providerId, modelId, mode }, { user, signal }) => {
+      const started = Date.now();
+      try {
+        const ctx = await providerContext(accessible(user, providerId));
+        const image = await createImageGen(ctx, modelId, mode)(TEST_IMAGE_PROMPT, { signal });
+        return {
+          ok: true,
+          latencyMs: Date.now() - started,
+          mediaId: deps.media.save(image.data, image.mediaType),
+        };
+      } catch (error) {
+        return { ok: false, error: mapProviderError(error) };
+      }
+    },
     'settings.getModelRoles': (_p, { user }) => getRoles(user),
     'settings.setModelRoles': (roles, { user }) => {
-      for (const ref of [roles.primary, roles.fast]) if (ref) accessible(user, ref.providerId);
+      for (const ref of [roles.primary, roles.fast, roles.image])
+        if (ref) accessible(user, ref.providerId);
       repos.settings.set(rolesKey(user.id), roles);
       deps.emit('providers.changed', {});
       return roles;
     },
   };
 
-  return { handlers, resolveModel };
+  return { handlers, resolveModel, resolveImageGenerator };
 }

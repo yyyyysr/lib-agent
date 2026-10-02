@@ -8,3 +8,4 @@ export {
   type ProviderContext,
 } from './models';
 export { testConnection } from './connection-test';
+export { createImageGenerator, type GeneratedImage, type ImageGenerator } from './images';

@@ -22,6 +22,7 @@ export function createServices(deps: CoreDeps): { handlers: RpcHandlers; streams
     models.resolveModel,
     books.library,
     books.branding,
+    models.resolveImageGenerator,
   );
 
   return {

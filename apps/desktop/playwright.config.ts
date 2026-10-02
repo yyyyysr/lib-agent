@@ -6,6 +6,8 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: false,
   workers: 1,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never', outputFolder: 'e2e-report' }]] : 'list',
+  reporter: process.env.CI
+    ? [['list'], ['html', { open: 'never', outputFolder: 'e2e-report' }]]
+    : 'list',
   outputDir: 'e2e-results',
 });

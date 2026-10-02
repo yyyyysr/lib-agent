@@ -4,6 +4,7 @@ import { net } from 'electron';
 import { openRepositories } from '@yys/db';
 import { BUILTIN_ADMIN, type CoreToMain, type MainToCore } from '@yys/shared';
 import { AuthService } from './auth';
+import { MediaStore } from './media';
 import { RpcServer, type PortLike } from './rpc-server';
 import { SecretsClient } from './secrets-client';
 import { seedDefaultSchool, seedSampleLibrary } from './seed';
@@ -38,10 +39,10 @@ const appFetch: typeof globalThis.fetch = (input, init) =>
   net.fetch(input instanceof URL ? input.toString() : (input as string | Request), init);
 
 // E2E 测试使用脚本化模型；主进程只在未打包的开发构建中传入该变量
-const scriptedModel =
-  process.env.YYS_E2E_SCRIPTED_MODEL === '1'
-    ? (await import('@yys/agent-core/testing')).createScriptedModel().model
-    : null;
+const testing =
+  process.env.YYS_E2E_SCRIPTED_MODEL === '1' ? await import('@yys/agent-core/testing') : null;
+const scriptedModel = testing ? testing.createScriptedModel().model : null;
+let artworkSeed = 0;
 
 const auth = new AuthService(repos, {
   builtinAdmin: {
@@ -57,7 +58,14 @@ const { handlers, streams } = createServices({
   auth,
   secrets,
   fetch: appFetch,
+  media: new MediaStore(dataDir),
   createModel: scriptedModel ? () => scriptedModel : undefined,
+  createImageGenerator: testing
+    ? () => async () => ({
+        data: testing.makeArtworkPng(600, 800, ++artworkSeed),
+        mediaType: 'image/png',
+      })
+    : undefined,
   emit: (topic, payload) => server.emit(topic, payload),
   info: {
     version: process.env.YYS_APP_VERSION ?? '0.0.0',

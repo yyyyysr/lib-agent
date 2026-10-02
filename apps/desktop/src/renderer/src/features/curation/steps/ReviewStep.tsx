@@ -17,6 +17,7 @@ import {
   type ExhibitionDetail,
   type PlanBook,
 } from '@yys/shared';
+import { BookCover } from '../../../components/BookCover';
 import { EditableText, Panel } from '../../../components/workflow';
 import { Badge, Button, Dialog, EmptyState, Input, Spinner } from '../../../components/ui';
 import { cn } from '../../../lib/cn';
@@ -284,7 +285,8 @@ function BookEntry({
   const sections = detail.plan!.sections;
   return (
     <div className="rounded-xl border border-border p-4">
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3">
+        <BookCover book={book} size="xs" />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-medium">《{book.title}》</span>

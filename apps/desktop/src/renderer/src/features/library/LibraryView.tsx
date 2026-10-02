@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import {
   BookCopy,
   ChevronDown,
+  ChevronRight,
   ClipboardPaste,
-  ExternalLink,
   FileUp,
   FolderInput,
+  LayoutGrid,
   Library,
+  List,
   Search,
   Trash2,
   University,
@@ -18,6 +20,8 @@ import {
   type BookSourceInfo,
 } from '@yys/shared';
 import { TopBar } from '../../app/TopBar';
+import { BookCover } from '../../components/BookCover';
+import { BookDetail } from '../../components/BookDetail';
 import {
   Badge,
   Button,
@@ -39,7 +43,8 @@ import { toast, useAppStore } from '../../store/app-store';
 import { useAuth, useRole } from '../../store/auth-store';
 import { useImportBooks } from './useImportBooks';
 
-const PAGE_SIZE = 50;
+const PAGE_SIZE = 48;
+const VIEW_KEY = 'yys-library-view';
 
 function useDebounced<T>(value: T, ms = 250): T {
   const [debounced, setDebounced] = useState(value);
@@ -116,6 +121,89 @@ function CompletenessBadge({ book }: { book: BookRecord }) {
   );
 }
 
+/** 列表视图：点击条目就地展开详情 */
+function BookRow({
+  book,
+  sourceName,
+  open,
+  onToggle,
+}: {
+  book: BookRecord;
+  sourceName?: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <li
+      className={cn(
+        'rounded-2xl border transition-colors',
+        open
+          ? 'border-border-strong bg-surface/40'
+          : 'border-transparent hover:bg-surface-hover/60',
+      )}
+    >
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-4 px-3 py-2.5 text-left"
+      >
+        <BookCover book={book} size="xs" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-[14px] font-medium">{book.title}</span>
+            {book.isSample && <Badge>示例</Badge>}
+          </div>
+          <p className="mt-0.5 truncate text-xs text-muted">
+            {book.authors.join('、') || '作者待核对'}
+            {book.summary ? ` · ${book.summary}` : ''}
+          </p>
+        </div>
+        <span className="hidden w-28 shrink-0 truncate text-[13px] text-muted lg:block">
+          {book.callNumber ?? '—'}
+        </span>
+        <span className="hidden w-36 shrink-0 truncate text-[13px] text-muted xl:block">
+          {book.subjects?.slice(0, 3).join('、') || '—'}
+        </span>
+        <span className="w-16 shrink-0">
+          <CompletenessBadge book={book} />
+        </span>
+        <ChevronRight
+          className={cn('size-4 shrink-0 text-subtle transition-transform', open && 'rotate-90')}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-border px-5 py-5">
+          <BookDetail book={book} sourceName={sourceName} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** 书架视图：以封面浏览，点击打开详情 */
+function Shelf({ books, onOpen }: { books: BookRecord[]; onOpen: (book: BookRecord) => void }) {
+  return (
+    <ul className="grid grid-cols-[repeat(auto-fill,minmax(132px,1fr))] gap-x-5 gap-y-7 pt-2">
+      {books.map((book) => (
+        <li key={book.id}>
+          <button
+            onClick={() => onOpen(book)}
+            className="lift-card group flex w-full flex-col items-center rounded-2xl border border-transparent p-2 text-center"
+          >
+            <BookCover book={book} size="md" />
+            <span className="mt-3 line-clamp-2 text-[13px] leading-snug font-medium">
+              {book.title}
+            </span>
+            <span className="mt-0.5 line-clamp-1 text-[11px] text-muted">
+              {book.authors.join('、')}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function LibraryView() {
   const navigate = useAppStore((s) => s.navigate);
   const me = useAuth((s) => s.user);
@@ -123,6 +211,11 @@ export function LibraryView() {
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [limit, setLimit] = useState(PAGE_SIZE);
+  const [view, setView] = useState<'list' | 'shelf'>(() =>
+    localStorage.getItem(VIEW_KEY) === 'shelf' ? 'shelf' : 'list',
+  );
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [dialogBook, setDialogBook] = useState<BookRecord | null>(null);
   const [pendingDelete, setPendingDelete] = useState<BookSourceInfo | null>(null);
   const query = useDebounced(text);
   const { importFromFile, openPaste, dialogs, busy } = useImportBooks();
@@ -133,8 +226,11 @@ export function LibraryView() {
     { text: query, sourceIds: sourceId ? [sourceId] : undefined, limit },
     { topics: ['books.changed'] },
   );
+  const sourceName = (id: string): string | undefined =>
+    sources.data?.find((s) => s.id === id)?.name;
 
   useEffect(() => setLimit(PAGE_SIZE), [query, sourceId]);
+  useEffect(() => localStorage.setItem(VIEW_KEY, view), [view]);
 
   const removeSource = async (): Promise<void> => {
     if (!pendingDelete) return;
@@ -195,7 +291,7 @@ export function LibraryView() {
               <University className="size-4 text-muted" /> 校园馆藏数据库
             </div>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              学校授权后可登录直接检索馆藏。目前请在学校系统中导出后导入。
+              学校授权后可登录直接检索馆藏。目前请在学校系统中导出后导入；导出文件中的“封面”列会显示为真实书封。
             </p>
             <Button
               size="sm"
@@ -222,6 +318,27 @@ export function LibraryView() {
             <span className="text-[13px] text-muted">
               {books.loading && !books.data ? '加载中…' : `共 ${total} 本`}
             </span>
+            <div className="flex-1" />
+            <div className="flex rounded-lg bg-surface p-0.5" role="group" aria-label="显示方式">
+              {(
+                [
+                  ['list', '列表', List],
+                  ['shelf', '书架', LayoutGrid],
+                ] as const
+              ).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  aria-pressed={view === key}
+                  onClick={() => setView(key)}
+                  className={cn(
+                    'flex h-7 items-center gap-1 rounded-md px-2.5 text-xs',
+                    view === key ? 'bg-bg font-medium shadow-sm' : 'text-muted hover:text-fg',
+                  )}
+                >
+                  <Icon className="size-3.5" /> {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-auto px-5 pb-5">
@@ -241,58 +358,20 @@ export function LibraryView() {
                     : '从学校系统导出 Excel / CSV / TXT / JSON 后导入。'
                 }
               />
+            ) : view === 'list' ? (
+              <ul className="space-y-1">
+                {items.map((book) => (
+                  <BookRow
+                    key={book.id}
+                    book={book}
+                    sourceName={sourceName(book.sourceId)}
+                    open={expanded === book.id}
+                    onToggle={() => setExpanded((id) => (id === book.id ? null : book.id))}
+                  />
+                ))}
+              </ul>
             ) : (
-              <table data-selectable className="w-full text-left text-[13px]">
-                <thead className="sticky top-0 bg-bg text-xs text-subtle">
-                  <tr className="border-b border-border">
-                    <th className="py-2 pr-3 font-medium">书名</th>
-                    <th className="py-2 pr-3 font-medium">作者</th>
-                    <th className="py-2 pr-3 font-medium">索书号</th>
-                    <th className="py-2 pr-3 font-medium">主题词</th>
-                    <th className="py-2 pr-3 font-medium">完整度</th>
-                    <th className="w-8 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((book) => (
-                    <tr
-                      key={book.id}
-                      className="border-b border-border align-top hover:bg-surface-hover/60"
-                    >
-                      <td className="py-2.5 pr-3">
-                        <div className="flex items-center gap-1.5 font-medium">
-                          {book.title}
-                          {book.isSample && <Badge>示例</Badge>}
-                        </div>
-                        {book.summary && (
-                          <p className="mt-0.5 line-clamp-1 text-xs text-muted">{book.summary}</p>
-                        )}
-                      </td>
-                      <td className="py-2.5 pr-3 text-muted">{book.authors.join('、') || '—'}</td>
-                      <td className="py-2.5 pr-3 whitespace-nowrap text-muted">
-                        {book.callNumber ?? '—'}
-                      </td>
-                      <td className="py-2.5 pr-3 text-muted">
-                        {book.subjects?.slice(0, 3).join('、') || '—'}
-                      </td>
-                      <td className="py-2.5 pr-3">
-                        <CompletenessBadge book={book} />
-                      </td>
-                      <td className="py-2.5">
-                        {book.sourceUrl && /^https?:\/\//.test(book.sourceUrl) && (
-                          <IconButton
-                            label="打开来源链接"
-                            size="sm"
-                            onClick={() => void window.yys.shell.openExternal(book.sourceUrl!)}
-                          >
-                            <ExternalLink className="size-3.5" />
-                          </IconButton>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <Shelf books={items} onOpen={setDialogBook} />
             )}
             {items.length < total && (
               <div className="flex justify-center pt-4">
@@ -310,6 +389,16 @@ export function LibraryView() {
         </div>
       </div>
 
+      <Dialog
+        open={dialogBook !== null}
+        onOpenChange={(open) => !open && setDialogBook(null)}
+        title="书目详情"
+        width="max-w-2xl"
+      >
+        {dialogBook && (
+          <BookDetail book={dialogBook} sourceName={sourceName(dialogBook.sourceId)} />
+        )}
+      </Dialog>
       <Dialog
         open={pendingDelete !== null}
         onOpenChange={(open) => !open && setPendingDelete(null)}

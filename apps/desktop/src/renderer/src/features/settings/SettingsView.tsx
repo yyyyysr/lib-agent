@@ -11,6 +11,7 @@ import {
   Sun,
   Trash2,
   UserRound,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   newId,
@@ -20,7 +21,9 @@ import {
   type ProviderConfig,
   type SchoolProfile,
   type ThemeSource,
+  type ImageTestResult,
 } from '@yys/shared';
+import { mediaUrl } from '@yys/shared/ipc';
 import { TopBar } from '../../app/TopBar';
 import {
   Badge,
@@ -111,6 +114,120 @@ function ModelSelect({
         ))}
       </select>
     </Field>
+  );
+}
+
+/** 生图模型单独接入：图像生成接口或能输出图片的多模态模型；可直接测试并预览 */
+function ImageModelPanel({ options }: { options: ModelOption[] }) {
+  const { roles, setRoles } = useModels();
+  const isAdmin = useRole('superadmin');
+  const image = roles?.image ?? null;
+  const selected = options.find((o) => sameRef(o, image)) ?? null;
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<ImageTestResult | null>(null);
+  const key = (o: ModelOption): string => `${o.providerId}::${o.modelId}`;
+  const mode = image?.mode ?? 'image';
+
+  const test = async (): Promise<void> => {
+    if (!image) return;
+    setTesting(true);
+    setResult(null);
+    try {
+      setResult(await core.call('providers.testImage', image));
+    } catch (error) {
+      setResult({
+        ok: false,
+        error: errorText(error) as { code: string; message: string; hint?: string },
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 rounded-2xl border border-border p-4">
+      <div className="flex items-start gap-3">
+        <ImageIcon className="mt-0.5 size-4 text-accent" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-medium">生图模型</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-muted">
+            用于 AI 绘制海报画面。可选专门的生图接口（如 gpt-image-1、Imagen、豆包
+            Seedream、硅基流动 Kolors/FLUX），或能输出图片的多模态模型（如
+            gemini-2.5-flash-image）。先在上方服务商中添加对应的模型名称。
+            {isAdmin && ' 配置在“全员共享”服务商上的生图模型，其他用户未配置时也能使用。'}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-[1fr_200px_auto] items-end gap-3">
+        <Field label="模型">
+          <select
+            value={selected ? key(selected) : ''}
+            onChange={(e) => {
+              const option = options.find((o) => key(o) === e.target.value);
+              setResult(null);
+              void setRoles({
+                image: option
+                  ? { providerId: option.providerId, modelId: option.modelId, mode }
+                  : null,
+              });
+            }}
+            className="h-9 w-full rounded-xl border border-border bg-bg px-3 text-sm text-fg focus:border-border-strong focus:outline-none"
+          >
+            <option value="">不使用 AI 绘图</option>
+            {options.map((o) => (
+              <option key={key(o)} value={key(o)}>
+                {o.providerName} · {o.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="接入方式">
+          <select
+            disabled={!image}
+            value={mode}
+            onChange={(e) =>
+              image &&
+              void setRoles({ image: { ...image, mode: e.target.value as 'image' | 'multimodal' } })
+            }
+            className="h-9 w-full rounded-xl border border-border bg-bg px-3 text-sm text-fg focus:border-border-strong focus:outline-none disabled:opacity-60"
+          >
+            <option value="image">生图接口</option>
+            <option value="multimodal">多模态模型</option>
+          </select>
+        </Field>
+        <Button variant="outline" disabled={!image} loading={testing} onClick={() => void test()}>
+          测试生图
+        </Button>
+      </div>
+      {result && (
+        <div
+          className={cn(
+            'mt-3 flex gap-3 rounded-xl p-3',
+            result.ok ? 'bg-accent-soft' : 'bg-danger-soft',
+          )}
+        >
+          {result.ok ? (
+            <>
+              <img
+                src={mediaUrl(result.mediaId)}
+                alt="测试生成的图片"
+                className="h-24 w-auto rounded-lg object-cover"
+              />
+              <p className="text-[13px] text-success">
+                生成成功 · 用时 {(result.latencyMs / 1000).toFixed(1)} 秒
+              </p>
+            </>
+          ) : (
+            <div>
+              <p className="text-[13px] text-danger">{result.error.message}</p>
+              {result.error.hint && (
+                <p className="mt-0.5 text-xs text-muted">{result.error.hint}</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -247,6 +364,7 @@ function ModelsSection() {
               }
             />
           </div>
+          <ImageModelPanel options={options} />
         </Section>
       )}
 

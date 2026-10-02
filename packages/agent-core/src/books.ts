@@ -10,6 +10,7 @@ export function toSnapshot(book: BookRecord): BookSnapshot {
     subjects: book.subjects ?? [],
     summary: book.summary,
     isbn: book.isbn,
+    coverUrl: book.coverUrl,
     isSample: book.isSample,
   };
 }

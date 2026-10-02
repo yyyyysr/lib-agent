@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createScriptedModel } from '@yys/agent-core/testing';
+import { createScriptedModel, makeArtworkPng } from '@yys/agent-core/testing';
 import { openRepositories, type Repositories } from '@yys/db';
 import type {
   AgentProgress,
@@ -13,6 +13,7 @@ import type {
   WireMessage,
 } from '@yys/shared';
 import { AuthService } from './auth';
+import { MediaStore } from './media';
 import { RpcServer, type PortLike } from './rpc-server';
 import { seedDefaultSchool, seedSampleLibrary } from './seed';
 import { createServices } from './services/index';
@@ -107,6 +108,7 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
   let curator: AuthResult;
   let approver: AuthResult;
   let vault: Map<string, string>;
+  let imagePrompts: string[];
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'yys-core-'));
@@ -115,6 +117,7 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     seedDefaultSchool(repos);
     const { model } = createScriptedModel();
     vault = new Map<string, string>();
+    imagePrompts = [];
     const secrets = {
       get: async (ref: string) => vault.get(ref) ?? null,
       remove: (ref: string) => void vault.delete(ref),
@@ -129,6 +132,11 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
       repos,
       auth,
       secrets,
+      media: new MediaStore(dir),
+      createImageGenerator: () => async (prompt) => {
+        imagePrompts.push(prompt);
+        return { data: makeArtworkPng(30, 40), mediaType: 'image/png' };
+      },
       createModel: () => model,
       emit: (topic, payload) => server.emit(topic, payload),
       info: {
@@ -310,6 +318,80 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     await client.stream('agent.run', { id, task: 'proposal' }, curator.token);
     const detail = await client.call<ExhibitionDetail>('exhibitions.get', { id }, curator.token);
     expect(detail.proposal?.organizer).toBe('示例大学图书馆');
+  });
+
+  it('AI 绘制海报画面：未配置生图模型时提示；可使用超级管理员共享的生图模型；画面保存为本地图片', async () => {
+    const t = curator.token;
+    const { id } = await client.call<ExhibitionDetail>('exhibitions.create', brief, t);
+    await client.stream('agent.run', { id, task: 'curate' }, t);
+    await client.stream('agent.run', { id, task: 'proposal' }, t);
+    await client.call('exhibitions.submit', { id, kind: 'proposal' }, t);
+    const [pending] = await client.call<{ id: string }[]>(
+      'approvals.list',
+      { status: 'pending' },
+      approver.token,
+    );
+    await client.call(
+      'approvals.decide',
+      { approvalId: pending!.id, decision: 'approve' },
+      approver.token,
+    );
+    await client.stream('agent.run', { id, task: 'package' }, t);
+
+    const missing = await client.raw('poster.generateArt', { id, style: '水彩插画' }, t);
+    expect(missing.error).toMatchObject({
+      code: 'no_model',
+      hint: expect.stringContaining('生图模型'),
+    });
+
+    const [shared] = await client.call<{ id: string }[]>('providers.list', undefined, admin.token);
+    const roles = await client.call<Record<string, unknown>>(
+      'settings.getModelRoles',
+      undefined,
+      admin.token,
+    );
+    await client.call(
+      'settings.setModelRoles',
+      { ...roles, image: { providerId: shared!.id, modelId: 'flux-dev', mode: 'image' } },
+      admin.token,
+    );
+
+    let detail = await client.call<ExhibitionDetail>(
+      'poster.generateArt',
+      { id, style: '国风水墨', instruction: '加入中大红砖建筑的意象' },
+      t,
+    );
+    const poster = detail.package!.poster;
+    expect(poster).toMatchObject({
+      template: 'artwork',
+      artworkId: expect.stringMatching(/^img_[a-f0-9]{16}$/),
+    });
+    expect(existsSync(join(dir, 'media', `${poster.artworkId}.png`))).toBe(true);
+    expect(imagePrompts[0]).toContain('No text');
+
+    detail = await client.call<ExhibitionDetail>(
+      'poster.generateArt',
+      { id, style: '扁平插画' },
+      t,
+    );
+    expect(detail.package!.poster.artworks).toHaveLength(2);
+    expect(detail.timeline.some((e) => e.message.includes('AI 绘制了海报画面'))).toBe(true);
+
+    // 提交上线审批后海报锁定
+    await client.call('exhibitions.submit', { id, kind: 'package' }, t);
+    expect((await client.raw('poster.generateArt', { id, style: '版画' }, t)).error?.code).toBe(
+      'invalid_state',
+    );
+  });
+
+  it('测试生图：返回保存好的图片', async () => {
+    const [shared] = await client.call<{ id: string }[]>('providers.list', undefined, admin.token);
+    const result = await client.call<{ ok: boolean; mediaId?: string }>(
+      'providers.testImage',
+      { providerId: shared!.id, modelId: 'flux-dev', mode: 'image' },
+      admin.token,
+    );
+    expect(result).toMatchObject({ ok: true, mediaId: expect.stringMatching(/^img_/) });
   });
 
   it('非内置的超级管理员可以正常授予与撤销', async () => {

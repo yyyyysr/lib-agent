@@ -1,10 +1,12 @@
 import { forwardRef } from 'react';
 import { BookOpen, CalendarDays, MapPin } from 'lucide-react';
 import type { ActivityPackage, Brief, PosterTemplate } from '@yys/shared';
+import { mediaUrl } from '@yys/shared/ipc';
 import { cn } from '../lib/cn';
 import { formatDate } from '../lib/format';
 
 export const posterTemplates: { key: PosterTemplate; label: string }[] = [
+  { key: 'artwork', label: 'AI 画面' },
   { key: 'classic', label: '书香' },
   { key: 'modern', label: '撞色' },
   { key: 'minimal', label: '简约' },
@@ -32,8 +34,62 @@ export const Poster = forwardRef<HTMLDivElement, PosterProps>(function Poster(
   const where = brief.venue || '地点待定';
   const titles = bookTitles.slice(0, 6);
 
+  // 选择了“AI 画面”但还没有生成画面时，回退到书香模板
+  const template = poster.template === 'artwork' && !poster.artworkId ? 'classic' : poster.template;
+
   const inner = (() => {
-    switch (poster.template) {
+    switch (template) {
+      case 'artwork':
+        return (
+          <div className="relative h-full overflow-hidden bg-[#1b2a2a] text-white">
+            <img
+              src={mediaUrl(poster.artworkId!)}
+              alt=""
+              draggable={false}
+              className="absolute inset-0 size-full object-cover"
+            />
+            <div className="absolute inset-x-0 top-0 h-[48%] bg-gradient-to-b from-black/65 via-black/30 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-[46%] bg-gradient-to-t from-black/75 via-black/35 to-transparent" />
+            <div className="relative flex h-full flex-col px-8 pt-8 pb-7">
+              <p className="text-[11px] tracking-[0.3em] text-white/80">{organizer} · 一页书展</p>
+              <p className="mt-4 text-[44px] leading-[1.08] font-bold [text-shadow:0_2px_18px_rgb(0_0_0/0.45)]">
+                {poster.headline}
+              </p>
+              <p className="mt-2 text-[17px] font-medium text-white/90 [text-shadow:0_1px_10px_rgb(0_0_0/0.5)]">
+                {poster.subheadline}
+              </p>
+              <div className="mt-auto">
+                <p className="mb-3 text-[14px] leading-relaxed text-white/95 [text-shadow:0_1px_8px_rgb(0_0_0/0.6)]">
+                  {poster.tagline}
+                </p>
+                <div className="rounded-2xl border border-white/25 bg-white/15 p-4 backdrop-blur-md">
+                  <div className="flex flex-wrap gap-1.5">
+                    {poster.highlights.map((h) => (
+                      <span key={h} className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px]">
+                        {h}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-3 flex items-end justify-between gap-3">
+                    <div className="space-y-1 text-[12px]">
+                      <p className="flex items-center gap-1.5">
+                        <CalendarDays className="size-3.5" />
+                        {when}
+                      </p>
+                      <p className="flex items-center gap-1.5">
+                        <MapPin className="size-3.5" />
+                        {where}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-[#1b2a2a]">
+                      {poster.callToAction}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
       case 'modern':
         return (
           <div className="flex h-full flex-col bg-[#f4efe6] text-[#1b1b1b]">

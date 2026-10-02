@@ -4,6 +4,7 @@ import { app, BrowserWindow } from 'electron';
 import log from 'electron-log/main';
 import { CoreHost } from './core-host';
 import { registerIpc } from './ipc';
+import { handleMediaProtocol, registerMediaScheme } from './media-protocol';
 import { installMenu } from './menu';
 import { SecretVault } from './secrets';
 import { createMainWindow } from './window';
@@ -15,6 +16,8 @@ app.setPath(
 );
 const dataDir = app.getPath('userData');
 mkdirSync(dataDir, { recursive: true });
+
+registerMediaScheme();
 
 log.initialize();
 log.transports.file.resolvePathFn = () => join(dataDir, 'logs', 'main.log');
@@ -35,6 +38,7 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     log.info(`[app] 启动 ${app.getVersion()} on ${process.platform}-${process.arch}`);
+    handleMediaProtocol(dataDir);
     const vault = new SecretVault(dataDir);
     core = new CoreHost({ dataDir, appVersion: app.getVersion(), vault });
     registerIpc({ core, vault, dataDir });

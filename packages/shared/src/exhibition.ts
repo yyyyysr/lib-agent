@@ -103,6 +103,7 @@ export const bookSnapshotSchema = z.object({
   subjects: z.array(z.string()).default([]),
   summary: z.string().optional(),
   isbn: z.string().optional(),
+  coverUrl: z.string().optional(),
   isSample: z.boolean(),
 });
 export type BookSnapshot = z.infer<typeof bookSnapshotSchema>;
@@ -230,7 +231,18 @@ export type Proposal = z.infer<typeof proposalSchema>;
 
 /* ───────────── 海报与活动包 ───────────── */
 
-export const posterTemplateSchema = z.enum(['classic', 'modern', 'minimal']);
+export const posterTemplateSchema = z.enum(['artwork', 'classic', 'modern', 'minimal']);
+
+/** AI 绘制海报画面的风格 */
+export const artStyles = [
+  '水彩插画',
+  '扁平插画',
+  '版画',
+  '国风水墨',
+  '3D 场景',
+  '摄影写实',
+] as const;
+export type ArtStyle = (typeof artStyles)[number];
 export type PosterTemplate = z.infer<typeof posterTemplateSchema>;
 
 export const packageSchema = z.object({
@@ -241,6 +253,10 @@ export const packageSchema = z.object({
     tagline: z.string(),
     highlights: z.array(z.string()),
     callToAction: z.string(),
+    /** AI 绘制的海报画面（媒体 id），最近的在前 */
+    artworkId: z.string().optional(),
+    artworks: z.array(z.string()).default([]),
+    artPrompt: z.string().optional(),
   }),
   promotion: z.object({
     postTitle: z.string(),

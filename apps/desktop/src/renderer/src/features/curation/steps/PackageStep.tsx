@@ -1,12 +1,19 @@
-import { useRef } from 'react';
-import { Download, Image, Package, RefreshCcw, Send } from 'lucide-react';
-import { isEditable, type ActivityPackage, type ExhibitionDetail } from '@yys/shared';
+import { useRef, useState } from 'react';
+import { Download, Image, Package, RefreshCcw, Send, Loader2, Sparkles } from 'lucide-react';
+import {
+  artStyles,
+  isEditable,
+  type ActivityPackage,
+  type ArtStyle,
+  type ExhibitionDetail,
+} from '@yys/shared';
+import { mediaUrl } from '@yys/shared/ipc';
 import { Poster, posterTemplates } from '../../../components/Poster';
 import { EditableText, Panel } from '../../../components/workflow';
-import { Button, EmptyState } from '../../../components/ui';
+import { Button, EmptyState, Input } from '../../../components/ui';
 import { cn } from '../../../lib/cn';
 import { useBranding } from '../../../lib/use-branding';
-import { toast } from '../../../store/app-store';
+import { toast, useAppStore } from '../../../store/app-store';
 import { act, type StepProps } from '../actions';
 import { packageMarkdown } from '../export';
 import { exportText } from './ProposalStep';
@@ -58,6 +65,63 @@ function PromotionFields({
   );
 }
 
+/** AI 绘制海报画面：选择风格、补充要求；画面中不出现文字，标题与活动信息由模板排版 */
+function ArtPanel({
+  detail,
+  drawing,
+  onDraw,
+}: {
+  detail: ExhibitionDetail;
+  drawing: boolean;
+  onDraw: (style: ArtStyle, instruction: string) => void;
+}) {
+  const navigate = useAppStore((s) => s.navigate);
+  const [style, setStyle] = useState<ArtStyle>('水彩插画');
+  const [instruction, setInstruction] = useState('');
+  const hasArt = (detail.package?.poster.artworks.length ?? 0) > 0;
+  return (
+    <Panel
+      title="AI 绘制海报画面"
+      description="智能体根据主题与展区写出画面描述，再交给生图模型绘制；标题、时间、地点由海报模板排版，保证文字准确清晰。"
+      actions={
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => navigate({ name: 'settings', section: 'models' })}
+        >
+          生图模型设置
+        </Button>
+      }
+    >
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label="画面风格">
+        {artStyles.map((s) => (
+          <button
+            key={s}
+            aria-pressed={style === s}
+            onClick={() => setStyle(s)}
+            className={cn(
+              'rounded-full border px-3 py-1 text-xs',
+              style === s ? 'border-fg bg-fg text-bg' : 'border-border hover:bg-surface-hover',
+            )}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Input
+          value={instruction}
+          onChange={(e) => setInstruction(e.target.value)}
+          placeholder="补充画面要求（可选），例如：加入中山大学红砖建筑与紫荆花的意象"
+        />
+        <Button variant="primary" loading={drawing} onClick={() => onDraw(style, instruction)}>
+          <Sparkles className="size-3.5" /> {hasArt ? '重新绘制' : 'AI 绘制画面'}
+        </Button>
+      </div>
+    </Panel>
+  );
+}
+
 /** 审批人查看的只读版本 */
 export function PackagePreview({ detail }: { detail: ExhibitionDetail }) {
   const pkg = detail.package!;
@@ -81,6 +145,17 @@ export function PackagePreview({ detail }: { detail: ExhibitionDetail }) {
 export function PackageStep({ detail, editable, run }: StepProps) {
   const posterRef = useRef<HTMLDivElement>(null);
   const { organizer } = useBranding();
+  const [drawing, setDrawing] = useState(false);
+  const draw = async (style: ArtStyle, instruction: string): Promise<void> => {
+    setDrawing(true);
+    const result = await act(
+      'poster.generateArt',
+      { id: detail.id, style, instruction },
+      '海报画面已生成',
+    );
+    setDrawing(false);
+    if (result) posterRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
   const pkg = detail.package;
   const canEdit = editable && isEditable('package', detail.status);
   const canSubmit =
@@ -168,21 +243,57 @@ export function PackageStep({ detail, editable, run }: StepProps) {
         )}
       </div>
 
+      {canEdit && <ArtPanel detail={detail} drawing={drawing} onDraw={draw} />}
+
       <Panel title="海报">
         <div className="flex gap-6">
           <div className="space-y-3">
-            <Poster
-              ref={posterRef}
-              poster={pkg.poster}
-              brief={detail.brief}
-              bookTitles={detail.plan?.books.map((b) => b.book.title) ?? []}
-              organizer={organizer}
-            />
+            <div className="relative">
+              <Poster
+                ref={posterRef}
+                poster={pkg.poster}
+                brief={detail.brief}
+                bookTitles={detail.plan?.books.map((b) => b.book.title) ?? []}
+                organizer={organizer}
+              />
+              {drawing && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-black/45 text-white backdrop-blur-[2px]">
+                  <Loader2 className="size-6 animate-spin" />
+                  <p className="text-[13px]">正在绘制画面，约需 10–60 秒…</p>
+                </div>
+              )}
+            </div>
+            {pkg.poster.artworks.length > 0 && (
+              <div className="flex gap-1.5" role="group" aria-label="已生成的画面">
+                {pkg.poster.artworks.map((artworkId) => (
+                  <button
+                    key={artworkId}
+                    disabled={!canEdit}
+                    aria-label="使用这张画面"
+                    aria-pressed={pkg.poster.artworkId === artworkId}
+                    onClick={() =>
+                      void save({
+                        ...pkg,
+                        poster: { ...pkg.poster, artworkId, template: 'artwork' },
+                      })
+                    }
+                    className={cn(
+                      'h-14 w-[42px] overflow-hidden rounded-md border-2 disabled:opacity-60',
+                      pkg.poster.artworkId === artworkId
+                        ? 'border-accent'
+                        : 'border-transparent hover:border-border-strong',
+                    )}
+                  >
+                    <img src={mediaUrl(artworkId)} alt="" className="size-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-1.5">
               {posterTemplates.map((t) => (
                 <button
                   key={t.key}
-                  disabled={!canEdit}
+                  disabled={!canEdit || (t.key === 'artwork' && pkg.poster.artworks.length === 0)}
                   onClick={() => void save({ ...pkg, poster: { ...pkg.poster, template: t.key } })}
                   className={cn(
                     'h-8 rounded-lg px-3 text-[13px] disabled:opacity-60',

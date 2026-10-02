@@ -4,6 +4,14 @@
  */
 export type ThemeSource = 'system' | 'light' | 'dark';
 
+/** 本地媒体协议：AI 生成的图片与封面缓存都经主进程提供，界面不直接访问文件系统 */
+export const MEDIA_SCHEME = 'yys-media';
+export const mediaUrl = (mediaId: string): string => `${MEDIA_SCHEME}://media/${mediaId}`;
+/** 封面图经本地缓存加载：首次以普通请求下载，之后离线可用 */
+export const coverUrlFor = (url: string): string =>
+  `${MEDIA_SCHEME}://cover/?u=${encodeURIComponent(url)}`;
+export const mediaIdPattern = /^img_[a-f0-9]{16}$/;
+
 export const supportedImportExtensions = ['csv', 'tsv', 'txt', 'xlsx', 'xlsm', 'json', 'jsonl'];
 
 export interface CaptureRect {

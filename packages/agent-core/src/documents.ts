@@ -136,11 +136,68 @@ export async function generatePackage(
     },
   });
   return {
-    poster: { template: 'classic', ...text.poster, highlights: text.poster.highlights.slice(0, 3) },
+    poster: {
+      template: 'classic',
+      ...text.poster,
+      highlights: text.poster.highlights.slice(0, 3),
+      artworks: [],
+    },
     promotion: text.promotion,
     feedbackQuestions: text.feedbackQuestions,
     generatedAt: nowIso(),
   };
+}
+
+/* ───────────── 海报画面 ───────────── */
+
+const styleHints: Record<string, string> = {
+  水彩插画: 'soft watercolor illustration, gentle washes, paper texture',
+  扁平插画: 'modern flat vector illustration, clean shapes, limited palette',
+  版画: 'woodcut / linocut print style, bold textures, two or three ink colors',
+  国风水墨: 'Chinese ink wash painting (guohua), elegant brush strokes, generous negative space',
+  '3D 场景': 'stylized 3D render, soft studio lighting, claymorphism',
+  摄影写实: 'cinematic photography, natural light, shallow depth of field',
+};
+
+/** 模板兜底：文字模型不可用时也能生成可用的画面提示词 */
+export function fallbackArtPrompt(input: {
+  brief: Brief;
+  plan: Plan;
+  style: string;
+  instruction?: string;
+}): string {
+  return [
+    `Vertical 3:4 poster artwork for a university library book exhibition about "${input.brief.theme}" for ${input.brief.audience}.`,
+    `Visual motifs: open books, reading, ${input.plan.sections.map((s) => s.title).join(', ')}.`,
+    `Style: ${styleHints[input.style] ?? input.style}.`,
+    'Keep the upper third calm and uncluttered for a title. Absolutely no text, letters, numbers, logos or watermarks.',
+    input.instruction ? `Additional request: ${input.instruction}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/**
+ * 海报画面提示词：让文字模型把主题转成具体的视觉意象。
+ * 图片中不出现文字——生图模型写中文不可靠，标题、时间、地点由海报模板排版。
+ */
+export async function buildArtPrompt(
+  model: LanguageModel,
+  input: { brief: Brief; plan: Plan; style: string; instruction?: string; signal?: AbortSignal },
+): Promise<string> {
+  const { prompt } = await generateStructured({
+    model,
+    task: 'art_prompt',
+    temperature: 0.8,
+    signal: input.signal,
+    schema: z.object({ prompt: z.string().describe('英文图像提示词，60–120 个英文单词') }),
+    system:
+      '你是书展海报的美术指导。把书展主题转化为一幅竖版海报插画的英文提示词：给出具体的画面主体、场景、构图、色彩与光线，体现主题和目标读者。必须写明：画面上方三分之一留白以便放标题；画面中不能出现任何文字、字母、数字、logo 或水印。',
+    prompt: `主题：${input.brief.theme}\n目标读者：${input.brief.audience}\n书展标题：${input.plan.title}\n展区：${input.plan.sections.map((s) => s.title).join('、')}\n风格：${input.style}（${styleHints[input.style] ?? ''}）${input.instruction ? `\n额外要求：${input.instruction}` : ''}`,
+    validate: (v) =>
+      v.prompt.trim().split(/\s+/).length < 15 ? '提示词太短，请描述具体画面' : null,
+  });
+  return `${prompt.trim()} Vertical 3:4 composition. No text, no letters, no watermark.`;
 }
 
 /* ───────────── 复盘 ───────────── */

@@ -14,14 +14,20 @@ const candidates = {
   darwin: readdirSync(root)
     .filter((d) => d.startsWith('mac'))
     .map((d) => join(root, d, 'YiyeShuzhan.app', 'Contents', 'MacOS', 'YiyeShuzhan')),
-  win32: [join(root, 'win-unpacked', 'YiyeShuzhan.exe'), join(root, 'win-arm64-unpacked', 'YiyeShuzhan.exe')],
+  win32: [
+    join(root, 'win-unpacked', 'YiyeShuzhan.exe'),
+    join(root, 'win-arm64-unpacked', 'YiyeShuzhan.exe'),
+  ],
   linux: [join(root, 'linux-unpacked', 'YiyeShuzhan')],
 }[process.platform];
 const binary = candidates?.find((path) => existsSync(path));
 if (!binary) throw new Error(`没有找到可执行文件：${candidates?.join(', ')}`);
 
 const dataDir = mkdtempSync(join(tmpdir(), 'yys-packaged-'));
-const child = spawn(binary, [], { env: { ...process.env, YYS_USER_DATA_DIR: dataDir }, stdio: 'ignore' });
+const child = spawn(binary, [], {
+  env: { ...process.env, YYS_USER_DATA_DIR: dataDir },
+  stdio: 'ignore',
+});
 const log = join(dataDir, 'logs', 'main.log');
 
 const deadline = Date.now() + 30_000;

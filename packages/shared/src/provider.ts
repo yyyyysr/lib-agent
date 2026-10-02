@@ -73,13 +73,23 @@ export type ProviderInput = z.infer<typeof providerInputSchema>;
 export const modelRefSchema = z.object({ providerId: z.string(), modelId: z.string() });
 export type ModelRef = z.infer<typeof modelRefSchema>;
 
+/** 生图模型：image 走图像生成接口（如 gpt-image、Imagen、Seedream），multimodal 走能输出图片的多模态对话模型（如 Gemini 图像模型） */
+export const imageModelRefSchema = modelRefSchema.extend({ mode: z.enum(['image', 'multimodal']) });
+export type ImageModelRef = z.infer<typeof imageModelRefSchema>;
+
 export const modelRolesSchema = z.object({
   /** 筛选、编排、撰写、对话 */
   primary: modelRefSchema.nullable(),
   /** 标题、摘要、轻量改写；为空时回退到 primary */
   fast: modelRefSchema.nullable(),
+  /** 海报画面等图片生成；为空时不能使用 AI 绘图 */
+  image: imageModelRefSchema.nullable().default(null),
 });
 export type ModelRoles = z.infer<typeof modelRolesSchema>;
+
+export type ImageTestResult =
+  | { ok: true; latencyMs: number; mediaId: string }
+  | { ok: false; error: { code: string; message: string; hint?: string } };
 
 export type ConnectionTestResult =
   | {

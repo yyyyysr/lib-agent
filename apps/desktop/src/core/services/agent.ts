@@ -1,4 +1,6 @@
 import {
+  buildArtPrompt,
+  fallbackArtPrompt,
   generatePackage,
   generateProposal,
   generateRetrospective,
@@ -30,6 +32,7 @@ import type { createModelServices } from './models';
 
 type ExhibitionServices = ReturnType<typeof createExhibitionServices>;
 type ResolveModel = ReturnType<typeof createModelServices>['resolveModel'];
+type ResolveImage = ReturnType<typeof createModelServices>['resolveImageGenerator'];
 
 /** 进度事件队列：后台任务写入，RPC 流读出 */
 function channel<T>() {
@@ -87,6 +90,7 @@ export function createAgentServices(
   resolveModel: ResolveModel,
   library: LibraryAccess,
   branding: () => SchoolBranding,
+  resolveImageGenerator: ResolveImage,
 ) {
   const { repos } = deps;
   const { owned, log, changed, find } = exhibitions;
@@ -263,119 +267,165 @@ export function createAgentServices(
     message: string,
   ): ExhibitionRecord => exhibitions.savePlan(record, plan, user, message);
 
-  const handlers: Pick<RpcHandlers, 'plan.replaceBook' | 'plan.regenerateGuide' | 'plan.rewrite'> =
-    {
-      'plan.replaceBook': ({ id, oldBookId, newBookId }, { user, signal }) => {
-        const record = editablePlan(user, id);
-        const plan = structuredClone(record.plan);
-        const index = plan.books.findIndex((b) => b.book.id === oldBookId);
-        if (index < 0) throw new AppError('not_found', '要替换的书不在书单中');
-        if (plan.books.some((b) => b.book.id === newBookId))
-          throw new AppError('invalid_params', '这本书已经在书单中');
-        const alternate = plan.alternates.find((a) => a.book.id === newBookId);
-        const libraryBook = alternate ? undefined : repos.books.getByIds([newBookId])[0];
-        const book = alternate?.book ?? (libraryBook ? toSnapshot(libraryBook) : undefined);
-        if (!book) throw new AppError('not_found', '书库中没有找到这本书');
-        const old = plan.books[index]!;
-        return withLock(id, async () => {
-          const { model } = await resolveModel(user);
-          const section = plan.sections.find((s) => s.id === old.sectionId);
-          const reason = alternate?.reason ?? '由策展人从书库中选入';
-          const guide = await writeGuide(model, {
-            book,
+  const handlers: Pick<
+    RpcHandlers,
+    'plan.replaceBook' | 'plan.regenerateGuide' | 'plan.rewrite' | 'poster.generateArt'
+  > = {
+    'plan.replaceBook': ({ id, oldBookId, newBookId }, { user, signal }) => {
+      const record = editablePlan(user, id);
+      const plan = structuredClone(record.plan);
+      const index = plan.books.findIndex((b) => b.book.id === oldBookId);
+      if (index < 0) throw new AppError('not_found', '要替换的书不在书单中');
+      if (plan.books.some((b) => b.book.id === newBookId))
+        throw new AppError('invalid_params', '这本书已经在书单中');
+      const alternate = plan.alternates.find((a) => a.book.id === newBookId);
+      const libraryBook = alternate ? undefined : repos.books.getByIds([newBookId])[0];
+      const book = alternate?.book ?? (libraryBook ? toSnapshot(libraryBook) : undefined);
+      if (!book) throw new AppError('not_found', '书库中没有找到这本书');
+      const old = plan.books[index]!;
+      return withLock(id, async () => {
+        const { model } = await resolveModel(user);
+        const section = plan.sections.find((s) => s.id === old.sectionId);
+        const reason = alternate?.reason ?? '由策展人从书库中选入';
+        const guide = await writeGuide(model, {
+          book,
+          brief: record.brief,
+          sectionTitle: section?.title ?? '',
+          reason,
+          signal,
+        });
+        const evidence: PlanBook['evidence'] = [
+          'title',
+          ...(book.subjects.length ? (['subjects'] as const) : []),
+          ...(book.summary ? (['summary'] as const) : []),
+        ];
+        plan.books[index] = {
+          book,
+          sectionId: old.sectionId,
+          reason,
+          evidence,
+          confidence: evidence.length > 1 ? 'medium' : 'low',
+          ...guide,
+          edited: false,
+        };
+        plan.alternates = [
+          { book: old.book, reason: '被替换下的书目' },
+          ...plan.alternates.filter((a) => a.book.id !== newBookId),
+        ];
+        return exhibitions.toDetail(
+          applyPlan(record, plan, user, `将《${old.book.title}》替换为《${book.title}》`),
+          user,
+        );
+      });
+    },
+    'plan.regenerateGuide': ({ id, bookId, instruction }, { user, signal }) => {
+      const record = editablePlan(user, id);
+      const plan = structuredClone(record.plan);
+      const entry = plan.books.find((b) => b.book.id === bookId);
+      if (!entry) throw new AppError('not_found', '这本书不在书单中');
+      return withLock(id, async () => {
+        const { model } = await resolveModel(user);
+        const section = plan.sections.find((s) => s.id === entry.sectionId);
+        Object.assign(
+          entry,
+          await writeGuide(model, {
+            book: entry.book,
             brief: record.brief,
             sectionTitle: section?.title ?? '',
-            reason,
+            reason: entry.reason,
+            instruction,
+            signal,
+          }),
+          {
+            edited: false,
+          },
+        );
+        return exhibitions.toDetail(
+          applyPlan(record, plan, user, `重新生成《${entry.book.title}》的导读`),
+          user,
+        );
+      });
+    },
+    'poster.generateArt': ({ id, style, instruction }, { user, signal }) => {
+      const record = owned(user, id);
+      if (!isEditable('package', record.status) || !record.package || !record.plan) {
+        throw new AppError('invalid_state', '请先生成海报与活动包；提交上线审批后海报不能再修改');
+      }
+      const plan = record.plan;
+      return withLock(id, async () => {
+        // 先确认生图模型可用，避免白白调用文字模型
+        const { generate, label } = await resolveImageGenerator(user);
+        let prompt: string;
+        try {
+          const { model } = await resolveModel(user);
+          prompt = await buildArtPrompt(model, {
+            brief: record.brief,
+            plan,
+            style,
+            instruction,
             signal,
           });
-          const evidence: PlanBook['evidence'] = [
-            'title',
-            ...(book.subjects.length ? (['subjects'] as const) : []),
-            ...(book.summary ? (['summary'] as const) : []),
-          ];
-          plan.books[index] = {
-            book,
-            sectionId: old.sectionId,
-            reason,
-            evidence,
-            confidence: evidence.length > 1 ? 'medium' : 'low',
-            ...guide,
-            edited: false,
-          };
-          plan.alternates = [
-            { book: old.book, reason: '被替换下的书目' },
-            ...plan.alternates.filter((a) => a.book.id !== newBookId),
-          ];
-          return exhibitions.toDetail(
-            applyPlan(record, plan, user, `将《${old.book.title}》替换为《${book.title}》`),
-            user,
-          );
+        } catch (error) {
+          if (signal.aborted) throw error;
+          prompt = fallbackArtPrompt({ brief: record.brief, plan, style, instruction });
+        }
+        const image = await generate(prompt, { signal });
+        const artworkId = deps.media.save(image.data, image.mediaType);
+        const current = find(id).package!;
+        const pkg = {
+          ...current,
+          poster: {
+            ...current.poster,
+            template: 'artwork' as const,
+            artworkId,
+            artworks: [artworkId, ...current.poster.artworks].slice(0, 8),
+            artPrompt: prompt,
+          },
+        };
+        const updated = repos.exhibitions.update(id, {
+          package: pkg,
+          status: record.status === 'proposal_approved' ? 'package_draft' : record.status,
         });
-      },
-      'plan.regenerateGuide': ({ id, bookId, instruction }, { user, signal }) => {
-        const record = editablePlan(user, id);
-        const plan = structuredClone(record.plan);
-        const entry = plan.books.find((b) => b.book.id === bookId);
-        if (!entry) throw new AppError('not_found', '这本书不在书单中');
-        return withLock(id, async () => {
-          const { model } = await resolveModel(user);
-          const section = plan.sections.find((s) => s.id === entry.sectionId);
-          Object.assign(
-            entry,
-            await writeGuide(model, {
-              book: entry.book,
-              brief: record.brief,
-              sectionTitle: section?.title ?? '',
-              reason: entry.reason,
-              instruction,
-              signal,
-            }),
-            {
-              edited: false,
-            },
-          );
-          return exhibitions.toDetail(
-            applyPlan(record, plan, user, `重新生成《${entry.book.title}》的导读`),
-            user,
-          );
-        });
-      },
-      'plan.rewrite': ({ id, target, sectionId, instruction }, { user, signal }) => {
-        const record = editablePlan(user, id);
-        const plan = structuredClone(record.plan);
-        return withLock(id, async () => {
-          const { model } = await resolveModel(user);
-          const base = { brief: record.brief, plan, instruction, signal };
-          let message: string;
-          if (target === 'introduction') {
-            plan.introduction = await rewriteText(model, {
-              ...base,
-              kind: '总导语',
-              current: plan.introduction,
-              maxChars: 300,
-            });
-            message = '按要求改写了总导语';
-          } else if (target === 'section') {
-            const section = plan.sections.find((s) => s.id === sectionId);
-            if (!section) throw new AppError('not_found', '展区不存在');
-            section.panelText = await rewriteText(model, {
-              ...base,
-              kind: `展区“${section.title}”的展板短文`,
-              current: section.panelText,
-              maxChars: 150,
-            });
-            message = `按要求改写了展区“${section.title}”的展板短文`;
-          } else if (target === 'statement') {
-            plan.statement = await rewriteStatement(model, base);
-            message = '按要求改写了策展说明';
-          } else {
-            plan.activity = await rewriteActivity(model, base);
-            message = '按要求调整了活动流程';
-          }
-          return exhibitions.toDetail(applyPlan(record, plan, user, message), user);
-        });
-      },
-    };
+        log(record, 'agent', `AI 绘制了海报画面（${style}，${label}）`, user);
+        return exhibitions.toDetail(updated, user);
+      });
+    },
+    'plan.rewrite': ({ id, target, sectionId, instruction }, { user, signal }) => {
+      const record = editablePlan(user, id);
+      const plan = structuredClone(record.plan);
+      return withLock(id, async () => {
+        const { model } = await resolveModel(user);
+        const base = { brief: record.brief, plan, instruction, signal };
+        let message: string;
+        if (target === 'introduction') {
+          plan.introduction = await rewriteText(model, {
+            ...base,
+            kind: '总导语',
+            current: plan.introduction,
+            maxChars: 300,
+          });
+          message = '按要求改写了总导语';
+        } else if (target === 'section') {
+          const section = plan.sections.find((s) => s.id === sectionId);
+          if (!section) throw new AppError('not_found', '展区不存在');
+          section.panelText = await rewriteText(model, {
+            ...base,
+            kind: `展区“${section.title}”的展板短文`,
+            current: section.panelText,
+            maxChars: 150,
+          });
+          message = `按要求改写了展区“${section.title}”的展板短文`;
+        } else if (target === 'statement') {
+          plan.statement = await rewriteStatement(model, base);
+          message = '按要求改写了策展说明';
+        } else {
+          plan.activity = await rewriteActivity(model, base);
+          message = '按要求调整了活动流程';
+        }
+        return exhibitions.toDetail(applyPlan(record, plan, user, message), user);
+      });
+    },
+  };
 
   const streams: StreamHandlers = {
     'agent.run': async ({ id, task }, { user, signal }) => {
