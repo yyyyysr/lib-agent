@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { LockKeyhole } from 'lucide-react';
+import { KeyRound, LockKeyhole } from 'lucide-react';
 import { Toaster } from '../components/Toaster';
 import { Button, EmptyState, Spinner, TooltipProvider } from '../components/ui';
 import { AdminView } from '../features/admin/AdminView';
@@ -61,6 +61,27 @@ function LoginRequired() {
   );
 }
 
+/** 仍在使用初始密码或被管理员重置过的密码时持续提示 */
+function PasswordBanner() {
+  const user = useAuth((s) => s.user);
+  const navigate = useAppStore((s) => s.navigate);
+  if (!user?.mustChangePassword) return null;
+  return (
+    <div className="flex items-center justify-center gap-3 bg-warning-soft px-4 py-1.5 text-xs text-warning">
+      <KeyRound className="size-3.5" />
+      {user.builtin
+        ? '超级管理员仍在使用初始密码，请尽快修改。'
+        : '你的密码已被管理员重置，请尽快修改。'}
+      <button
+        className="font-medium underline"
+        onClick={() => navigate({ name: 'settings', section: 'account' })}
+      >
+        修改密码
+      </button>
+    </div>
+  );
+}
+
 function Page({ view }: { view: View }) {
   switch (view.name) {
     case 'home':
@@ -101,6 +122,7 @@ export function App() {
         {sidebarOpen && <Sidebar />}
         <main className="flex min-w-0 flex-1 flex-col bg-bg">
           <CoreStatusBanner />
+          <PasswordBanner />
           {status === 'loading' ? (
             <div className="flex flex-1 items-center justify-center">
               <Spinner />

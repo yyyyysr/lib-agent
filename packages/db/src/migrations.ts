@@ -166,4 +166,10 @@ export const migrations: string[] = [
   );
   CREATE INDEX feedback_exhibition_idx ON feedback_entries(exhibition_id, created_at);
   `,
+
+  /* sql */ `
+  -- 内置超级管理员与“需修改密码”标记
+  ALTER TABLE users ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
+  `,
 ];

@@ -17,16 +17,16 @@ let userDataDir: string;
 const errors: string[] = [];
 
 const accounts = {
-  admin: { username: 'admin', password: 'admin-pass-1', name: '超管老师', no: 'A0001' },
+  admin: { username: 'super_user', password: '12345678', name: '超级管理员', no: 'ADMIN' },
   curator: { username: 'curator', password: 'curator-pass', name: '李同学', no: '2024010203' },
   reviewer: { username: 'reviewer', password: 'reviewer-pass', name: '王老师', no: 'T9001' },
 };
 type Account = (typeof accounts)[keyof typeof accounts];
+let current: Account | null = null;
 
 test.describe.configure({ mode: 'serial' });
 
-test.beforeAll(async () => {
-  userDataDir = mkdtempSync(join(tmpdir(), 'yys-e2e-'));
+async function launch(): Promise<void> {
   app = await electron.launch({
     args: [join(import.meta.dirname, '..', 'out', 'main', 'index.js')],
     env: {
@@ -40,6 +40,11 @@ test.beforeAll(async () => {
   page.on('console', (msg) => msg.type() === 'error' && errors.push(msg.text()));
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+test.beforeAll(async () => {
+  userDataDir = mkdtempSync(join(tmpdir(), 'yys-e2e-'));
+  await launch();
 });
 
 test.afterAll(async () => {
@@ -54,36 +59,45 @@ const nav = (name: string) =>
     .getByRole('button', { name: new RegExp(`^${name}`) })
     .click();
 const dialog = () => page.getByRole('dialog');
+const userButton = (account: Account) =>
+  page.getByRole('button', { name: new RegExp(`^${account.name.slice(0, 1)} ${account.name}`) });
 
+/** 已登录时通过“登录其他账号…”注册新账号，并勾选记住密码 */
 async function register(account: Account): Promise<void> {
-  await page.getByRole('button', { name: '登录 / 注册' }).click();
+  if (current) {
+    await userButton(current).click();
+    await page.getByRole('menuitem', { name: '登录其他账号…' }).click();
+  } else {
+    await page.getByRole('button', { name: '登录 / 注册' }).click();
+  }
   const d = dialog();
-  const title = d.getByRole('heading', { name: /初始化|登录一页书展/ });
-  await expect(title).toBeVisible();
-  if ((await title.textContent())?.includes('登录'))
-    await d.getByRole('button', { name: '注册', exact: true }).click();
+  await expect(d.getByRole('heading', { name: '登录一页书展' })).toBeVisible();
+  await d.getByRole('button', { name: '注册', exact: true }).click();
   await d.getByLabel('用户名').fill(account.username);
   await d.getByLabel('密码', { exact: true }).fill(account.password);
   await d.getByLabel('确认密码').fill(account.password);
   await d.getByLabel('姓名').fill(account.name);
   await d.getByLabel('学号 / 工号').fill(account.no);
-  await d.getByRole('button', { name: /注册并登录|创建并登录/ }).click();
-  await expect(page.getByRole('button', { name: new RegExp(account.name) })).toBeVisible();
+  await d.getByLabel(/记住密码/).check();
+  await d.getByRole('button', { name: '注册并登录' }).click();
+  await expect(userButton(account)).toBeVisible();
+  current = account;
 }
 
-async function login(account: Account): Promise<void> {
-  await page.getByRole('button', { name: '登录 / 注册' }).click();
-  await expect(dialog().getByRole('heading', { name: '登录一页书展' })).toBeVisible();
-  await dialog().getByLabel('用户名').fill(account.username);
-  await dialog().getByLabel('密码', { exact: true }).fill(account.password);
-  await dialog().getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page.getByRole('button', { name: new RegExp(account.name) })).toBeVisible();
-}
-
-async function logout(account: Account): Promise<void> {
-  await page.getByRole('button', { name: new RegExp(account.name) }).click();
-  await page.getByRole('menuitem', { name: '退出登录' }).click();
-  await expect(page.getByRole('button', { name: '登录 / 注册' })).toBeVisible();
+/** 切换到已记住密码的账号：已登录时用账号菜单，未登录时用登录框中的“一键登录” */
+async function actAs(account: Account): Promise<void> {
+  if (current === account) return;
+  if (current) {
+    await userButton(current).click();
+    await page.getByRole('menuitem', { name: new RegExp(account.name) }).click();
+  } else {
+    await page.getByRole('button', { name: '登录 / 注册' }).click();
+    await dialog()
+      .getByRole('button', { name: `以 ${account.name} 登录` })
+      .click();
+  }
+  await expect(userButton(account)).toBeVisible();
+  current = account;
 }
 
 async function openExhibition(): Promise<void> {
@@ -99,13 +113,17 @@ test('首页：还没有上线的书展时展示流程介绍', async () => {
   await shot('01-home-empty');
 });
 
-test('初始化：第一个账号成为超级管理员，并配置共享模型', async () => {
+test('内置超级管理员：用初始账号登录并记住密码，配置共享模型', async () => {
   await page.getByRole('button', { name: '登录 / 注册' }).click();
-  await expect(dialog().getByText('初始化：创建超级管理员')).toBeVisible();
-  await shot('02-setup');
-  await page.keyboard.press('Escape');
-  await register(accounts.admin);
-  await expect(page.getByText('超级管理员', { exact: true })).toBeVisible();
+  const d = dialog();
+  await expect(d.getByText('初始密码')).toBeVisible();
+  await shot('02-login');
+  await d.getByRole('button', { name: '填入' }).click();
+  await d.getByLabel(/记住密码/).check();
+  await d.getByRole('button', { name: '登录', exact: true }).click();
+  await expect(userButton(accounts.admin)).toBeVisible();
+  current = accounts.admin;
+  await expect(page.getByText('超级管理员仍在使用初始密码，请尽快修改。')).toBeVisible();
 
   await page.getByRole('button', { name: /^设置/ }).click();
   await page.getByRole('button', { name: '模型与密钥' }).click();
@@ -120,28 +138,29 @@ test('初始化：第一个账号成为超级管理员，并配置共享模型',
   await dialog().getByText('共享给全部用户').click();
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('全员共享')).toBeVisible();
-  await logout(accounts.admin);
 });
 
-test('注册策展人与审批人，超级管理员分配审批权限', async () => {
+test('注册一律为普通用户；通过账号菜单切换，超级管理员分配审批权限', async () => {
   await register(accounts.curator);
   await expect(page.getByText('普通用户', { exact: true })).toBeVisible();
   // 普通用户看不到审批与管理入口
   await expect(page.getByRole('navigation').getByRole('button', { name: /^审批/ })).toHaveCount(0);
-  await logout(accounts.curator);
   await register(accounts.reviewer);
-  await logout(accounts.reviewer);
+  await expect(page.getByText('普通用户', { exact: true })).toBeVisible();
 
-  await login(accounts.admin);
+  await userButton(accounts.reviewer).click();
+  await shot('03-switch-menu');
+  await page.keyboard.press('Escape');
+  await actAs(accounts.admin);
   await nav('管理');
+  await expect(page.getByLabel(`${accounts.admin.name} 的角色`)).toBeDisabled();
   await page.getByLabel(`${accounts.reviewer.name} 的角色`).selectOption('approver');
   await expect(page.getByText('角色已更新')).toBeVisible();
   await shot('03-admin-users');
-  await logout(accounts.admin);
 });
 
 test('策展人：填写需求 → 智能体策展 → 核对清单', async () => {
-  await login(accounts.curator);
+  await actAs(accounts.curator);
   await nav('策展');
   await page.getByRole('button', { name: '发起策展' }).first().click();
   const d = dialog();
@@ -166,22 +185,20 @@ test('策展人：确认方案 → 生成策展申请书 → 提交立项审批'
   await shot('05-proposal');
   await page.getByRole('button', { name: '提交立项审批' }).click();
   await expect(page.getByText('立项审批中').first()).toBeVisible();
-  await logout(accounts.curator);
 });
 
 test('审批人：同意立项', async () => {
-  await login(accounts.reviewer);
+  await actAs(accounts.reviewer);
   await nav('审批');
   await page.getByRole('button', { name: /立项审批.*真假之间/ }).click();
   await page.getByPlaceholder(/填写意见/).fill('选题贴合新生需求，同意立项。');
   await shot('06-approve-proposal');
   await page.getByRole('button', { name: '同意', exact: true }).click();
   await expect(page.getByText('立项审批：同意', { exact: true })).toBeVisible();
-  await logout(accounts.reviewer);
 });
 
 test('策展人：看到“同意”，生成海报与完整活动包并提交上线审批', async () => {
-  await login(accounts.curator);
+  await actAs(accounts.curator);
   await openExhibition();
   await page.getByRole('button', { name: /立项审批/ }).click();
   await expect(page.getByText('立项审批：同意', { exact: true })).toBeVisible();
@@ -191,16 +208,14 @@ test('策展人：看到“同意”，生成海报与完整活动包并提交�
   await shot('07-package');
   await page.getByRole('button', { name: '提交上线审批' }).click();
   await expect(page.getByText('上线审批中').first()).toBeVisible();
-  await logout(accounts.curator);
 });
 
 test('审批人：同意上线，首页更新为最新一期', async () => {
-  await login(accounts.reviewer);
+  await actAs(accounts.reviewer);
   await nav('审批');
   await page.getByRole('button', { name: /上线审批.*真假之间/ }).click();
   await page.getByRole('button', { name: '同意', exact: true }).click();
   await expect(page.getByText('上线审批：同意', { exact: true }).first()).toBeVisible();
-  await logout(accounts.reviewer);
 
   await nav('首页');
   await expect(page.getByText('最新一期')).toBeVisible();
@@ -210,7 +225,7 @@ test('审批人：同意上线，首页更新为最新一期', async () => {
 });
 
 test('策展人：录入执行记录与反馈，生成复盘，首页展示活动成果', async () => {
-  await login(accounts.curator);
+  await actAs(accounts.curator);
   await openExhibition();
   await page.getByRole('button', { name: /上线与反馈/ }).click();
   await page.getByLabel('参与人数').fill('36');
@@ -250,6 +265,28 @@ test('后台服务被强制结束后自动重启，登录状态保持', async ()
     timeout: 15_000,
   });
   await expect(page.getByRole('button', { name: new RegExp(accounts.curator.name) })).toBeVisible();
+});
+
+test('记住密码：退出登录并重启应用后，在登录框中一键登录', async () => {
+  await userButton(current!).click();
+  await page.getByRole('menuitem', { name: '退出登录' }).click();
+  await expect(page.getByRole('button', { name: '登录 / 注册' })).toBeVisible();
+  current = null;
+
+  await app.close();
+  await launch();
+  await page.getByRole('button', { name: '登录 / 注册' }).click();
+  await expect(
+    dialog()
+      .getByText(/已记住密码/)
+      .first(),
+  ).toBeVisible();
+  await shot('11-saved-accounts');
+  await dialog()
+    .getByRole('button', { name: `以 ${accounts.reviewer.name} 登录` })
+    .click();
+  await expect(userButton(accounts.reviewer)).toBeVisible();
+  await expect(page.getByRole('navigation').getByRole('button', { name: /^审批/ })).toBeVisible();
 });
 
 test('没有控制台错误', () => {

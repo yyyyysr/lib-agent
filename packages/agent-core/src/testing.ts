@@ -30,14 +30,12 @@ const defaults: Record<string, ScriptHandler> = {
     const refs = refsIn(prompt);
     const count = Number(/请选出 (\d+) 本/.exec(prompt)?.[1] ?? 8);
     return {
-      selections: refs
-        .slice(0, count)
-        .map((ref) => ({
-          ref,
-          reason: `${ref} 与主题密切相关，适合目标读者入门阅读。`,
-          evidence: ['title', 'subjects', 'summary'],
-          confidence: 'high',
-        })),
+      selections: refs.slice(0, count).map((ref) => ({
+        ref,
+        reason: `${ref} 与主题密切相关，适合目标读者入门阅读。`,
+        evidence: ['title', 'subjects', 'summary'],
+        confidence: 'high',
+      })),
       alternates: refs.slice(count, count + 3).map((ref) => ({ ref, reason: '可作为备选' })),
     };
   },

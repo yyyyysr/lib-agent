@@ -38,7 +38,8 @@ function UsersTab() {
               className={cn('border-b border-border', u.status === 'disabled' && 'opacity-50')}
             >
               <td className="py-2.5 pr-3 font-medium">
-                {u.displayName} {u.id === me?.id && <Badge>我</Badge>}
+                {u.displayName} {u.builtin && <Badge tone="accent">内置</Badge>}{' '}
+                {u.id === me?.id && <Badge>我</Badge>}
               </td>
               <td className="py-2.5 pr-3 text-muted">{u.username}</td>
               <td className="py-2.5 pr-3 text-muted">{u.memberNo}</td>
@@ -47,6 +48,7 @@ function UsersTab() {
                 <select
                   aria-label={`${u.displayName} 的角色`}
                   value={u.role}
+                  disabled={u.builtin}
                   onChange={(e) =>
                     void act(
                       'users.update',
@@ -73,7 +75,7 @@ function UsersTab() {
                   >
                     <KeyRound className="size-3.5" /> 重置密码
                   </Button>
-                  {u.id !== me?.id && (
+                  {u.id !== me?.id && !u.builtin && (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -95,7 +97,7 @@ function UsersTab() {
         </tbody>
       </table>
       <p className="mt-3 text-xs text-subtle">
-        新注册的账号默认为普通用户。审批管理员负责立项与上线审批；超级管理员管理用户权限与全局数据。至少需要保留一名超级管理员。
+        所有注册的账号都是普通用户；内置超级管理员在初始化时创建，不能降级或停用。审批管理员负责立项与上线审批；超级管理员管理用户权限与全局数据。至少需要保留一名超级管理员。
       </p>
       <Dialog
         open={resetting !== null}

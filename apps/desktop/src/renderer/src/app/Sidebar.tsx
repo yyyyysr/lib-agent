@@ -10,6 +10,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  UserPlus,
   UserRound,
 } from 'lucide-react';
 import { roleLabels } from '@yys/shared';
@@ -68,7 +69,8 @@ function PendingBadge() {
 
 export function Sidebar() {
   const { view, navigate, toggleSidebar } = useAppStore();
-  const { user, signOut, openPrompt } = useAuth();
+  const { user, signOut, openPrompt, accounts, switchTo } = useAuth();
+  const others = accounts.filter((a) => a.username.toLowerCase() !== user?.username.toLowerCase());
   const isApprover = useRole('approver');
   const isAdmin = useRole('superadmin');
   const go = (target: View) => () => navigate(target);
@@ -166,6 +168,23 @@ export function Sidebar() {
               </MenuLabel>
               <MenuItem onSelect={go({ name: 'settings', section: 'account' })}>
                 <UserRound className="size-3.5" /> 账号与资料
+              </MenuItem>
+              <MenuSeparator />
+              <MenuLabel>切换账号</MenuLabel>
+              {others.map((a) => (
+                <MenuItem key={a.username} onSelect={() => void switchTo(a.username)}>
+                  <span className="flex size-5 items-center justify-center rounded-full bg-surface-2 text-[10px] font-semibold">
+                    {a.displayName.slice(0, 1)}
+                  </span>
+                  <span className="flex-1">{a.displayName}</span>
+                  <span className="text-[11px] text-subtle">
+                    {roleLabels[a.role]}
+                    {a.rememberPassword ? '' : ' · 需输入密码'}
+                  </span>
+                </MenuItem>
+              ))}
+              <MenuItem onSelect={() => openPrompt('login')}>
+                <UserPlus className="size-3.5" /> 登录其他账号…
               </MenuItem>
               <MenuSeparator />
               <MenuItem

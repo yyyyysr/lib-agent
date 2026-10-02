@@ -32,12 +32,17 @@ export class CoreHost {
     this.ready = false;
     // utilityProcess 只接受字符串环境变量，值为 undefined 会导致启动失败
     const env: Record<string, string> = {};
-    for (const [key, value] of Object.entries(process.env)) if (typeof value === 'string') env[key] = value;
+    for (const [key, value] of Object.entries(process.env))
+      if (typeof value === 'string') env[key] = value;
     // 测试用的脚本化模型只允许在未打包的开发构建中启用
     if (app.isPackaged) delete env.YYS_E2E_SCRIPTED_MODEL;
     env.YYS_DATA_DIR = this.options.dataDir;
     env.YYS_APP_VERSION = this.options.appVersion;
-    const child = utilityProcess.fork(coreEntry, [], { serviceName: 'YiyeShuzhan Core', stdio: 'pipe', env });
+    const child = utilityProcess.fork(coreEntry, [], {
+      serviceName: 'YiyeShuzhan Core',
+      stdio: 'pipe',
+      env,
+    });
     this.child = child;
 
     child.stdout?.on('data', (chunk: Buffer) => log.info(`[core] ${chunk.toString().trimEnd()}`));

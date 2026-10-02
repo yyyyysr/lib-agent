@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { net } from 'electron';
 import { openRepositories } from '@yys/db';
-import type { CoreToMain, MainToCore } from '@yys/shared';
+import { BUILTIN_ADMIN, type CoreToMain, type MainToCore } from '@yys/shared';
 import { AuthService } from './auth';
 import { RpcServer, type PortLike } from './rpc-server';
 import { SecretsClient } from './secrets-client';
@@ -42,7 +42,14 @@ const scriptedModel =
     ? (await import('@yys/agent-core/testing')).createScriptedModel().model
     : null;
 
-const auth = new AuthService(repos);
+const auth = new AuthService(repos, {
+  builtinAdmin: {
+    username: process.env.YYS_ADMIN_USERNAME || BUILTIN_ADMIN.username,
+    password: process.env.YYS_ADMIN_PASSWORD || BUILTIN_ADMIN.password,
+  },
+  secrets,
+});
+if (await auth.ensureBuiltinAdmin()) console.log('[core] 已创建内置超级管理员账号');
 let server: RpcServer;
 const { handlers, streams } = createServices({
   repos,

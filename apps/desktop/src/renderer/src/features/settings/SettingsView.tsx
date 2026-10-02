@@ -120,6 +120,7 @@ function ModelsSection() {
   });
   const { options, roles, setRoles } = useModels();
   const isAdmin = useRole('superadmin');
+  const { data: presets = [] } = useRpc('providers.presets', undefined);
   const [dialog, setDialog] = useState<{ open: boolean; editing?: ProviderConfig }>({
     open: false,
   });
@@ -175,7 +176,9 @@ function ModelsSection() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium">{p.displayName}</span>
                   {p.ownerId === null && <Badge tone="accent">全员共享</Badge>}
-                  {p.hasKey ? (
+                  {!p.hasKey && presets.find((x) => x.id === p.presetId)?.requiresKey === false ? (
+                    <Badge>无需 Key</Badge>
+                  ) : p.hasKey ? (
                     <Badge tone="success">Key 已保存</Badge>
                   ) : (
                     <Badge tone="warning">未填写 Key</Badge>
@@ -555,8 +558,38 @@ function AboutSection() {
   );
 }
 
+function SavedAccountsSection() {
+  const { accounts, forgetAccount, user } = useAuth();
+  if (accounts.length === 0) return null;
+  return (
+    <Section
+      title="本机保存的账号"
+      description="用于快速登录与切换账号。“记住密码”的账号密码用系统钥匙串加密保存，移除后需重新输入。"
+    >
+      <ul className="divide-y divide-border rounded-2xl border border-border">
+        {accounts.map((a) => (
+          <li key={a.username} className="flex items-center gap-3 px-4 py-2.5">
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13px] font-medium">
+                {a.displayName} {a.username === user?.username && <Badge>当前</Badge>}
+              </span>
+              <span className="block text-xs text-subtle">
+                {a.username} · {roleLabels[a.role]} ·{' '}
+                {a.rememberPassword ? '已记住密码' : '未记住密码'}
+              </span>
+            </span>
+            <Button size="sm" variant="ghost" onClick={() => void forgetAccount(a.username)}>
+              从本机移除
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
 function AccountSection() {
-  const { user, setUser } = useAuth();
+  const { user, setUser, passwordChanged } = useAuth();
   const [profile, setProfile] = useState({
     displayName: user?.displayName ?? '',
     memberNo: user?.memberNo ?? '',
@@ -587,7 +620,8 @@ function AccountSection() {
   const changePassword = async (): Promise<void> => {
     setBusy('password');
     try {
-      await core.call('auth.changePassword', passwords);
+      const updated = await core.call('auth.changePassword', passwords);
+      await passwordChanged(updated, passwords.newPassword);
       setPasswords({ oldPassword: '', newPassword: '' });
       toast({ tone: 'success', title: '密码已修改' });
     } catch (error) {
@@ -661,6 +695,7 @@ function AccountSection() {
           </Button>
         </div>
       </Section>
+      <SavedAccountsSection />
     </div>
   );
 }

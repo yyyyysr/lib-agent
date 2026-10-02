@@ -11,6 +11,7 @@ export function createAccountServices(deps: CoreDeps) {
     | 'auth.status'
     | 'auth.register'
     | 'auth.login'
+    | 'auth.loginRemembered'
     | 'auth.me'
     | 'auth.logout'
     | 'auth.updateProfile'
@@ -22,13 +23,14 @@ export function createAccountServices(deps: CoreDeps) {
   > = {
     'app.info': () => ({ ...deps.info, sqliteVersion: repos.db.sqliteVersion }),
 
-    'auth.status': () => ({ needsSetup: auth.needsSetup() }),
+    'auth.status': () => auth.status(),
     'auth.register': async (input) => {
       const result = await auth.register(input);
       deps.emit('users.changed', {});
       return result;
     },
     'auth.login': ({ username, password }) => auth.login(username, password),
+    'auth.loginRemembered': ({ username }) => auth.loginRemembered(username),
     'auth.me': (_p, { user }) => user,
     'auth.logout': (_p, { token }) => auth.logout(token),
     'auth.updateProfile': (profile, { user }) => {
@@ -43,6 +45,9 @@ export function createAccountServices(deps: CoreDeps) {
     'users.update': ({ id, role, status }, { user }) => {
       const target = repos.users.get(id);
       if (!target) throw new AppError('not_found', '用户不存在');
+      if (target.builtin && ((role && role !== 'superadmin') || status === 'disabled')) {
+        throw new AppError('invalid_state', '内置超级管理员不能降级或停用');
+      }
       const losesAdmin =
         target.role === 'superadmin' && ((role && role !== 'superadmin') || status === 'disabled');
       if (losesAdmin && repos.users.countByRole().superadmin <= 1) {

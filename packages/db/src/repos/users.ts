@@ -10,6 +10,8 @@ interface UserRow {
   department: string;
   role: Role;
   status: 'active' | 'disabled';
+  builtin: number;
+  must_change_password: number;
   created_at: string;
   last_login_at: string | null;
 }
@@ -22,6 +24,8 @@ const toInfo = (row: UserRow): UserInfo => ({
   department: row.department,
   role: row.role,
   status: row.status,
+  builtin: row.builtin === 1,
+  mustChangePassword: row.must_change_password === 1,
   createdAt: row.created_at,
   lastLoginAt: row.last_login_at ?? undefined,
 });
@@ -43,11 +47,19 @@ export class UserRepo {
     return counts;
   }
 
-  create(input: Profile & { username: string; passwordHash: string; role: Role }): UserInfo {
+  create(
+    input: Profile & {
+      username: string;
+      passwordHash: string;
+      role: Role;
+      builtin?: boolean;
+      mustChangePassword?: boolean;
+    },
+  ): UserInfo {
     const id = newId('user');
     this.db.run(
-      `INSERT INTO users(id, username, password_hash, display_name, member_no, department, role, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
+      `INSERT INTO users(id, username, password_hash, display_name, member_no, department, role, status, builtin, must_change_password, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
       id,
       input.username,
       input.passwordHash,
@@ -55,6 +67,8 @@ export class UserRepo {
       input.memberNo,
       input.department,
       input.role,
+      input.builtin ? 1 : 0,
+      input.mustChangePassword ? 1 : 0,
       nowIso(),
     );
     return this.get(id)!;
@@ -115,8 +129,14 @@ export class UserRepo {
     return this.get(id);
   }
 
-  setPassword(id: string, passwordHash: string): void {
-    this.db.run('UPDATE users SET password_hash = ? WHERE id = ?', passwordHash, id);
+  /** mustChange：管理员重置的密码需要用户自己再改一次 */
+  setPassword(id: string, passwordHash: string, mustChange = false): void {
+    this.db.run(
+      'UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?',
+      passwordHash,
+      mustChange ? 1 : 0,
+      id,
+    );
   }
 
   touchLogin(id: string): void {

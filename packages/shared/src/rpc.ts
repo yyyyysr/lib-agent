@@ -40,6 +40,7 @@ import {
   registerInputSchema,
   roleSchema,
   type AuthResult,
+  type AuthStatus,
   type Role,
   type UserInfo,
 } from './user';
@@ -91,6 +92,7 @@ export const rpcParamSchemas = {
   'auth.status': z.void(),
   'auth.register': registerInputSchema,
   'auth.login': loginInputSchema,
+  'auth.loginRemembered': z.object({ username: z.string().trim().min(1) }),
   'auth.me': z.void(),
   'auth.logout': z.void(),
   'auth.updateProfile': profileSchema,
@@ -197,13 +199,14 @@ export const rpcParamSchemas = {
 
 export interface RpcResults {
   'app.info': AppInfo;
-  'auth.status': { needsSetup: boolean };
+  'auth.status': AuthStatus;
   'auth.register': AuthResult;
   'auth.login': AuthResult;
+  'auth.loginRemembered': AuthResult;
   'auth.me': UserInfo | null;
   'auth.logout': void;
   'auth.updateProfile': UserInfo;
-  'auth.changePassword': void;
+  'auth.changePassword': UserInfo;
   'showcase.latest': ShowcaseExhibition | null;
   'showcase.list': ExhibitionSummary[];
   'showcase.get': ShowcaseExhibition;
@@ -262,6 +265,7 @@ export const methodAccess = {
   'auth.status': 'public',
   'auth.register': 'public',
   'auth.login': 'public',
+  'auth.loginRemembered': 'public',
   'auth.me': 'public',
   'auth.logout': 'public',
   'auth.updateProfile': 'user',

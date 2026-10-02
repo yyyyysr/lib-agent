@@ -13,7 +13,7 @@ import { ipcChannels, supportedImportExtensions, type ThemeSource } from '@yys/s
 import type { CoreHost } from './core-host';
 import type { SecretVault } from './secrets';
 
-const secretRefPattern = /^provider:[A-Za-z0-9_-]{1,64}$/;
+const secretRefPattern = /^(provider|account):[A-Za-z0-9_.-]{1,64}$/;
 
 /** 去掉 Windows / macOS 文件名中不允许的字符 */
 const safeFileName = (name: string): string =>
@@ -49,8 +49,9 @@ export function registerIpc(deps: { core: CoreHost; vault: SecretVault; dataDir:
   handle(ipcChannels.secretsSet, (_e, ref: unknown, value: unknown) => {
     if (typeof ref !== 'string' || !secretRefPattern.test(ref)) throw new Error('无效的密钥引用');
     if (typeof value !== 'string' || value.length === 0 || value.length > 4096)
-      throw new Error('无效的 API Key');
-    deps.vault.set(ref, value.trim());
+      throw new Error('无效的密钥内容');
+    // 账号密码按原样保存；API Key 去除复制时带入的首尾空白
+    deps.vault.set(ref, ref.startsWith('account:') ? value : value.trim());
   });
   handle(ipcChannels.secretsRemove, (_e, ref: unknown) => {
     if (typeof ref === 'string' && secretRefPattern.test(ref)) deps.vault.remove(ref);

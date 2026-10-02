@@ -51,9 +51,28 @@ export interface UserInfo extends Profile {
   username: string;
   role: Role;
   status: 'active' | 'disabled';
+  /** 内置超级管理员：初始化时创建，不能降级或停用 */
+  builtin: boolean;
+  /** 仍在使用初始密码或被管理员重置过的密码 */
+  mustChangePassword: boolean;
   createdAt: string;
   lastLoginAt?: string;
 }
+
+/** 内置超级管理员的默认账号；可用环境变量 YYS_ADMIN_USERNAME / YYS_ADMIN_PASSWORD 覆盖 */
+export const BUILTIN_ADMIN = { username: 'super_user', password: '12345678' } as const;
+
+export interface AuthStatus {
+  builtinAdmin: {
+    username: string;
+    /** 仍为初始密码时才返回，用于登录框提示 */
+    defaultPassword?: string;
+  };
+}
+
+/** 本机“记住密码”的账号在密钥保险箱中的引用 */
+export const secretRefForAccount = (username: string): string =>
+  `account:${username.toLowerCase()}`;
 
 export interface AuthResult {
   token: string;

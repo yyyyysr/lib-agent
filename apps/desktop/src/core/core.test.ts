@@ -106,22 +106,28 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
   let admin: AuthResult;
   let curator: AuthResult;
   let approver: AuthResult;
+  let vault: Map<string, string>;
 
   beforeEach(async () => {
     dir = mkdtempSync(join(tmpdir(), 'yys-core-'));
     repos = openRepositories(join(dir, 'core.db'));
     seedSampleLibrary(repos);
     const { model } = createScriptedModel();
-    const vault = new Map<string, string>();
-    const auth = new AuthService(repos);
+    vault = new Map<string, string>();
+    const secrets = {
+      get: async (ref: string) => vault.get(ref) ?? null,
+      remove: (ref: string) => void vault.delete(ref),
+    };
+    const auth = new AuthService(repos, {
+      builtinAdmin: { username: 'super_user', password: '12345678' },
+      secrets,
+    });
+    await auth.ensureBuiltinAdmin();
     let server: RpcServer;
     const { handlers, streams } = createServices({
       repos,
       auth,
-      secrets: {
-        get: async (ref) => vault.get(ref) ?? null,
-        remove: (ref) => void vault.delete(ref),
-      },
+      secrets,
       createModel: () => model,
       emit: (topic, payload) => server.emit(topic, payload),
       info: {
@@ -140,11 +146,12 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     );
     client = createClient(server);
 
-    expect(await client.call('auth.status', undefined)).toEqual({ needsSetup: true });
-    admin = await client.call<AuthResult>('auth.register', {
-      ...profile('超管', 'A001'),
-      username: 'admin',
-      password: 'admin-pass-1',
+    expect(await client.call('auth.status', undefined)).toEqual({
+      builtinAdmin: { username: 'super_user', defaultPassword: '12345678' },
+    });
+    admin = await client.call<AuthResult>('auth.login', {
+      username: 'super_user',
+      password: '12345678',
     });
     curator = await client.call<AuthResult>('auth.register', {
       ...profile('李同学', '2024010203'),
@@ -180,10 +187,58 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('首个账号为超级管理员，之后注册为普通用户', () => {
-    expect(admin.user.role).toBe('superadmin');
+  it('内置超级管理员已初始化；所有注册账号都是普通用户', () => {
+    expect(admin.user).toMatchObject({
+      role: 'superadmin',
+      builtin: true,
+      mustChangePassword: true,
+    });
     expect(curator.user.role).toBe('user');
     expect(approver.user.role).toBe('approver');
+  });
+
+  it('内置超级管理员不能降级或停用；修改初始密码后登录框不再提示初始密码', async () => {
+    expect(
+      (await client.raw('users.update', { id: admin.user.id, role: 'user' }, admin.token)).error
+        ?.message,
+    ).toContain('内置超级管理员');
+    expect(
+      (await client.raw('users.update', { id: admin.user.id, status: 'disabled' }, admin.token))
+        .error?.code,
+    ).toBe('invalid_state');
+    const updated = await client.call<{ mustChangePassword: boolean }>(
+      'auth.changePassword',
+      { oldPassword: '12345678', newPassword: 'new-admin-pass' },
+      admin.token,
+    );
+    expect(updated.mustChangePassword).toBe(false);
+    expect(await client.call('auth.status', undefined)).toEqual({
+      builtinAdmin: { username: 'super_user' },
+    });
+  });
+
+  it('记住密码：用保存的密码一键登录；密码被重置后失效记录被清除', async () => {
+    expect((await client.raw('auth.loginRemembered', { username: 'curator' })).error?.code).toBe(
+      'not_found',
+    );
+    vault.set('account:curator', 'curator-pass');
+    const result = await client.call<AuthResult>('auth.loginRemembered', { username: 'Curator' });
+    expect(result.user.username).toBe('curator');
+
+    await client.call(
+      'users.resetPassword',
+      { id: result.user.id, password: 'reset-pass-1' },
+      admin.token,
+    );
+    const stale = await client.raw('auth.loginRemembered', { username: 'curator' });
+    expect(stale.error).toMatchObject({ code: 'unauthorized', message: '保存的密码已失效' });
+    expect(vault.has('account:curator')).toBe(false);
+    // 被重置密码的用户下次登录需自行修改
+    const relogin = await client.call<AuthResult>('auth.login', {
+      username: 'curator',
+      password: 'reset-pass-1',
+    });
+    expect(relogin.user.mustChangePassword).toBe(true);
   });
 
   it('权限：未登录、普通用户、审批管理员各自被拒绝的操作', async () => {
@@ -230,11 +285,20 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     ).toContain('停用');
   });
 
-  it('至少保留一名超级管理员', async () => {
-    expect(
-      (await client.raw('users.update', { id: admin.user.id, role: 'user' }, admin.token)).error
-        ?.code,
-    ).toBe('invalid_state');
+  it('非内置的超级管理员可以正常授予与撤销', async () => {
+    const second = await client.call<AuthResult>('auth.register', {
+      ...profile('副管', 'A002'),
+      username: 'admin2',
+      password: 'admin2-pass',
+    });
+    expect(second.user.role).toBe('user');
+    await client.call('users.update', { id: second.user.id, role: 'superadmin' }, admin.token);
+    const demoted = await client.raw(
+      'users.update',
+      { id: second.user.id, role: 'user' },
+      admin.token,
+    );
+    expect(demoted.error).toBeUndefined();
   });
 
   it('完整流程：需求 → 策展 → 申请书 → 立项审批（退回再通过）→ 活动包 → 上线审批 → 首页 → 反馈 → 复盘', async () => {
