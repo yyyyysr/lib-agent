@@ -140,7 +140,7 @@ test('内置超级管理员：用初始账号登录并记住密码，配置共�
   await dialog().getByRole('button', { name: '添加', exact: true }).click();
   await dialog().getByText('共享给全部用户').click();
   await dialog().getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByText('全员共享')).toBeVisible();
+  await expect(page.getByText('全员共享', { exact: true })).toBeVisible();
 
   // 生图模型单独接入，并测试生成
   await page
