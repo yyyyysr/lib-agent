@@ -40,7 +40,7 @@ const records = catalog.books as unknown as Record<string, CatalogRecord>;
  * - 书名、作者、主题词（策展用标签）在下方维护；
  * - ISBN、出版信息、著录字段、内容简介来自中国国家图书馆“文津”书目记录（无国图记录时来自豆瓣读书），
  *   封面为对应版本的实体书封面，来源链接为对应版本的豆瓣读书页面，均保存在 catalog.json；
- * - 国图索书号需在能访问国图 OPAC 的网络下运行 `pnpm sample:callnumbers` 获取。
+ * - 索书号取自国图 OPAC 的馆藏记录（中文基藏），可在能访问国图 OPAC 的网络下运行 `pnpm sample:callnumbers` 更新。
  * 刻意保留的缺陷用于演示核对清单：
  * - sample-0012、sample-0016 不带索书号
  * - sample-0013、sample-0015 不带摘要
