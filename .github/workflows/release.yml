@@ -1,11 +1,15 @@
 name: Release
 
 # 在 GitHub 上发布 Release（如 v0.4.0）后自动打包 macOS 与 Windows 安装包并附加到该 Release；
-# 也可在 Actions 页面手动运行，产物保存为构建附件。
+# 也可在 Actions 页面手动运行：填写已有的 tag 则重新打包该版本并替换安装包，不填只保存为构建附件。
 on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 要重新打包的版本 tag（如 v0.4.0），留空则打包 main
+        required: false
 
 permissions:
   contents: write
@@ -26,10 +30,13 @@ jobs:
             os: windows-latest
             script: dist:win
             files: |
-              apps/desktop/release/*/*.exe
+              apps/desktop/release/*/*-win-x64.exe
+              apps/desktop/release/*/*-win-arm64.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -46,7 +53,12 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; fi
+          # 未配置的 Secrets 会以空字符串传入，electron-builder 会把空的 CSC_LINK 当作证书路径
+          if [ -z "$CSC_LINK" ]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          [ -n "$APPLE_ID" ] || unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
           pnpm --filter @yys/desktop ${{ matrix.script }}
       - name: 检查打包后的应用能否启动
         run: node apps/desktop/scripts/smoke-packaged.mjs
@@ -56,8 +68,8 @@ jobs:
           path: ${{ matrix.files }}
           if-no-files-found: error
       - name: 附加到 Release
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
           files: ${{ matrix.files }}
