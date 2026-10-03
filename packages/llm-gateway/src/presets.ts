@@ -52,6 +52,16 @@ export const providerPresets: ProviderPreset[] = [
     group: 'domestic',
   },
   {
+    id: 'minimax',
+    name: 'MiniMax 海螺',
+    kind: 'openai-compatible',
+    defaultBaseURL: 'https://api.minimax.cn/v1',
+    requiresKey: true,
+    keyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
+    editableBaseURL: true,
+    group: 'domestic',
+  },
+  {
     id: 'openai',
     name: 'OpenAI',
     kind: 'openai',

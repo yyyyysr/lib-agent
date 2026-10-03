@@ -154,8 +154,9 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
           <p className="text-[14px] font-medium">生图模型</p>
           <p className="mt-0.5 text-xs leading-relaxed text-muted">
             用于 AI 绘制海报画面。可选专门的生图接口（如 gpt-image-1、Imagen、豆包
-            Seedream、硅基流动 Kolors/FLUX），或能输出图片的多模态模型（如
-            gemini-2.5-flash-image）。先在上方服务商中添加对应的模型名称。
+            Seedream、MiniMax image-01、硅基流动 Kolors/FLUX），或能输出图片的多模态模型（如
+            gemini-2.5-flash-image）。先在上方服务商中添加对应的模型名称（MiniMax
+            请添加 image-01，接入方式选「生图接口」）。
             {isAdmin && ' 配置在“全员共享”服务商上的生图模型，其他用户未配置时也能使用。'}
           </p>
         </div>

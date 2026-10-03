@@ -1,7 +1,7 @@
 {
   "name": "@yys/desktop",
   "productName": "一页书展",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "一页书展：高校图书馆 AI 策展与运营智能体",
   "author": "一页书展团队",
