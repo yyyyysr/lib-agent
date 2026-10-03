@@ -37,10 +37,17 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: 打包
-        run: pnpm --filter @yys/desktop ${{ matrix.script }}
+        shell: bash
         env:
-          # 未配置签名证书：生成未签名包（macOS 为 ad-hoc 签名）
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # 在仓库 Secrets 中配置证书后自动签名（macOS 另需 Apple ID 用于公证）；未配置时生成未签名包
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$CSC_LINK" ]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; fi
+          pnpm --filter @yys/desktop ${{ matrix.script }}
       - name: 检查打包后的应用能否启动
         run: node apps/desktop/scripts/smoke-packaged.mjs
       - uses: actions/upload-artifact@v4

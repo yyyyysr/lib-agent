@@ -33,7 +33,12 @@ const dialog = () => page.getByRole('dialog');
 
 test.beforeAll(async () => {
   if (!existsSync(serverBundle))
-    execFileSync('pnpm', ['--filter', '@yys/server', 'build'], { cwd: root, stdio: 'ignore' });
+    // Windows 上 pnpm 是 pnpm.cmd，需要经 shell 调用
+    execFileSync('pnpm', ['--filter', '@yys/server', 'build'], {
+      cwd: root,
+      stdio: 'ignore',
+      shell: process.platform === 'win32',
+    });
   serverDir = mkdtempSync(join(tmpdir(), 'yys-e2e-server-'));
   mkdirSync(join(serverDir, 'tls'));
   execFileSync(
