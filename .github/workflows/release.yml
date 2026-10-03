@@ -76,4 +76,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.release.tag_name || inputs.tag }}
         # 只上传（同名文件替换），不修改 Release 的说明与 tag
-        run: gh release upload "$TAG" ${{ matrix.upload }} --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          for attempt in 1 2 3; do
+            gh release upload "$TAG" ${{ matrix.upload }} --clobber --repo "$GITHUB_REPOSITORY" && exit 0
+            echo "上传失败，第 $attempt 次重试…"; sleep 15
+          done
+          exit 1
