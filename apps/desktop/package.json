@@ -15,7 +15,8 @@
     "e2e": "pnpm --dir ../.. server:build && electron-vite build && playwright test",
     "dist:mac": "pnpm --dir ../.. sample:covers && electron-vite build && electron-builder --mac --publish never",
     "dist:win": "pnpm --dir ../.. sample:covers && electron-vite build && electron-builder --win --publish never",
-    "dist:dir": "pnpm --dir ../.. sample:covers && electron-vite build && electron-builder --dir --publish never"
+    "dist:dir": "pnpm --dir ../.. sample:covers && electron-vite build && electron-builder --dir --publish never",
+    "showcase": "electron-vite build && YYS_SHOWCASE=1 playwright test e2e/showcase.spec.ts"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "5.3.0",

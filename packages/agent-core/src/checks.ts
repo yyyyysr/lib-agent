@@ -69,8 +69,8 @@ export function ruleChecks(plan: Plan, brief: Brief): Draft[] {
         severity: 'warning',
         category: 'sample',
         bookId: book.id,
-        message: `${name}来自示例书库，馆藏信息为虚构示例`,
-        suggestion: '正式活动前请替换为学校真实馆藏记录',
+        message: `${name}来自示例书库，书目信息取自国家图书馆，不代表本校馆藏`,
+        suggestion: '正式活动前请换成学校馆藏中的记录，确认读者能在本馆借到',
       });
     }
     if (entry.guideBasis === 'title_only') {

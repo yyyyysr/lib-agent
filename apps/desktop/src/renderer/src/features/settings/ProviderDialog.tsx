@@ -95,7 +95,6 @@ export function ProviderDialog({
   editing?: ProviderConfig;
 }) {
   const { data: presets = [] } = useRpc('providers.presets', undefined);
-  const { data: roles } = useRpc('settings.getModelRoles', undefined);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [baseURL, setBaseURL] = useState('');
@@ -164,10 +163,12 @@ export function ProviderDialog({
       setKeySaved(true);
     }
     setSavedId(saved.id);
-    if (!roles?.primary && allModels[0]) {
+    // 读取最新的模型分工：对话框打开后可能已有其他服务商被设为主模型；保留已选的快速与生图模型
+    const current = await core.call('settings.getModelRoles');
+    if (!current.primary && allModels[0]) {
       await core.call('settings.setModelRoles', {
+        ...current,
         primary: { providerId: saved.id, modelId: allModels[0].id },
-        fast: roles?.fast ?? null,
       });
     }
     return saved;

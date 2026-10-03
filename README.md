@@ -2,6 +2,48 @@
 
 面向高校图书馆阅读推广的 AI 策展与运营智能体。桌面客户端（macOS / Windows 功能一致），支持自带模型 Key（BYOK），既可单机使用，也可连接团队服务器多人共用一份数据。
 
+<p align="center">
+  <img src="assets/readme/home.gif" alt="首页：最新一期书展，海报随鼠标倾斜，滚动时各区块渐显" width="860">
+</p>
+
+## 界面预览
+
+### 九步策展工作流
+
+从填写需求到智能体策展、核对清单、申请书、两轮审批、海报与活动包，到上线后的反馈与复盘：
+
+<p align="center">
+  <img src="assets/readme/workflow.gif" alt="策展工作流" width="860">
+</p>
+
+| 智能体策展与核对清单 | 策展申请书 |
+| :---: | :---: |
+| ![核对清单](assets/readme/curation-review.png) | ![策展申请书](assets/readme/proposal.png) |
+| **审批：同意或退回修改** | **AI 绘制海报画面与完整活动包** |
+| ![审批](assets/readme/approval.png) | ![海报与活动包](assets/readme/poster.png) |
+
+### 书库
+
+实体书封面、按国家图书馆书目详情展示的著录信息，列表与书架两种视图：
+
+<p align="center">
+  <img src="assets/readme/library.gif" alt="书库" width="860">
+</p>
+
+| 书目详情（ISBN、中图分类号、载体形态、索书号） | 书架视图 |
+| :---: | :---: |
+| ![书目详情](assets/readme/library-detail.png) | ![书架](assets/readme/library-shelf.png) |
+
+### 首页、设置与团队服务器
+
+| 活动成果（参与人数、评分、复盘） | 深色模式 |
+| :---: | :---: |
+| ![活动成果](assets/readme/home-results.png) | ![深色模式](assets/readme/home-dark.png) |
+| **模型与密钥：BYOK，可单独接入生图模型** | **连接团队服务器：核对证书指纹** |
+| ![模型与密钥](assets/readme/settings-models.png) | ![连接服务器](assets/readme/connect-server.png) |
+
+> 截图由 `pnpm --filter @yys/desktop showcase` 自动生成：用演示脚本代替真实模型，走完一期完整书展（`apps/desktop/e2e/showcase.spec.ts`）。
+
 ## 功能
 
 - **以书展为中心的九步工作流**：需求 → 智能体策展 → 核对清单 → 策展申请书 → 立项审批 → 海报与活动包 → 上线审批 → 上线与反馈 → 复盘。

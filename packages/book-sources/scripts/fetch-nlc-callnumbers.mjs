@@ -19,10 +19,25 @@ const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36';
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// 馆藏页列出每个复本的“馆藏 | 入藏年\分类号\种次号\馆藏地”
 const opacUrls = (record) => [
   `http://opac.nlc.cn/F?func=item-global&doc_library=NLC01&doc_number=${record}`,
-  `http://opac.nlc.cn/F?func=direct&local_base=NLC01&doc_number=${record}`,
 ];
+// 国图服务器对频繁请求会暂时拒绝连接
+const PACE_MS = 6000;
+
+/** 国图限流时连接会超时或被重置：等待后重试 */
+async function fetchWithRetry(url, attempts = 5) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fetchText(url);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      console.warn(`  请求失败（${error.message}），${attempt * 2} 分钟后重试…`);
+      await sleep(attempt * 120_000);
+    }
+  }
+}
 
 async function fetchText(url) {
   const response = await fetch(url, {
@@ -54,7 +69,7 @@ if (!args.includes('--set')) {
     let value;
     for (const url of opacUrls(book.nlcRecord)) {
       try {
-        const html = await fetchText(url);
+        const html = await fetchWithRetry(url);
         const values = parseCallNumbers(html);
         if (values.length) {
           value = pickCallNumber(values);
@@ -66,7 +81,7 @@ if (!args.includes('--set')) {
       } catch (error) {
         console.warn(`${id} 无法访问 ${url}：${error.message}`);
       }
-      await sleep(3000);
+      await sleep(PACE_MS);
     }
     if (value) {
       book.callNumber = value;
@@ -75,7 +90,6 @@ if (!args.includes('--set')) {
     } else {
       failed.push(`${id}《${book.title}》 ${opacUrls(book.nlcRecord)[0]}`);
     }
-    await sleep(3000);
   }
   if (failed.length) {
     console.log(`\n以下 ${failed.length} 本未能获取，可在浏览器中打开链接后用 --set 手动填写：`);

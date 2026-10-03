@@ -205,3 +205,4 @@ export function createScriptedModel(overrides: Record<string, ScriptHandler> = {
   });
   return { model, calls };
 }
+export { demoScript } from './demo-script';

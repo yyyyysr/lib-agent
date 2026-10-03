@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { net } from 'electron';
 import { createCore } from '@yys/core';
 import { BUILTIN_ADMIN, type CoreToMain, type MainToCore } from '@yys/shared';
@@ -27,10 +28,17 @@ const secrets = new SecretsClient(post);
 const appFetch: typeof globalThis.fetch = (input, init) =>
   net.fetch(input instanceof URL ? input.toString() : (input as string | Request), init);
 
-// E2E 测试使用脚本化模型；主进程只在未打包的开发构建中传入该变量
+// E2E 测试使用脚本化模型（demo 为截图用的演示内容）；主进程只在未打包的开发构建中传入该变量
+const scriptMode = process.env.YYS_E2E_SCRIPTED_MODEL;
 const testing =
-  process.env.YYS_E2E_SCRIPTED_MODEL === '1' ? await import('@yys/agent-core/testing') : null;
-const scriptedModel = testing ? testing.createScriptedModel().model : null;
+  scriptMode === '1' || scriptMode === 'demo' ? await import('@yys/agent-core/testing') : null;
+const scriptedModel = testing
+  ? testing.createScriptedModel(scriptMode === 'demo' ? testing.demoScript : {}).model
+  : null;
+const demoArtwork =
+  scriptMode === 'demo' && process.env.YYS_DEMO_ARTWORK
+    ? new Uint8Array(readFileSync(process.env.YYS_DEMO_ARTWORK))
+    : null;
 let artworkSeed = 0;
 
 const core = await createCore({
@@ -44,10 +52,10 @@ const core = await createCore({
   fetch: appFetch,
   createModel: scriptedModel ? () => scriptedModel : undefined,
   createImageGenerator: testing
-    ? () => async () => ({
-        data: testing.makeArtworkPng(600, 800, ++artworkSeed),
-        mediaType: 'image/png',
-      })
+    ? () => async () =>
+        demoArtwork
+          ? { data: demoArtwork, mediaType: 'image/jpeg' }
+          : { data: testing.makeArtworkPng(600, 800, ++artworkSeed), mediaType: 'image/png' }
     : undefined,
   info: {
     version: process.env.YYS_APP_VERSION ?? '0.0.0',

@@ -23,6 +23,20 @@ describe('国图 OPAC 索书号解析', () => {
     expect(parseCallNumbers(html)).toEqual(['2012\\F069.9-49\\12']);
   });
 
+  it('国图馆藏行：取中文基藏的索书号，去掉馆藏地', () => {
+    const row = (label: string, value: string) =>
+      `<tr><td class=td1 id=bold width=15% nowrap>\n ${label} \n</td><td class=td1 align=left>\n ${value} \n</td></tr>`;
+    const html = `<table id=wybzf border=0>${[
+      row('馆藏', '2012\\B80\\knm\\中文图书借阅区'),
+      row('', '<br>'),
+      row('馆藏', '2012\\B80\\42\\中文基藏\\闭架库房'),
+      row('馆藏', '2012\\B80\\48\\书刊保存本库\\书刊保存本 A栋负1层'),
+    ].join('')}</table>`;
+    const values = parseCallNumbers(html);
+    expect(values).toHaveLength(3);
+    expect(pickCallNumber(values)).toBe('2012\\B80\\42');
+  });
+
   it('没有索书号时返回空', () => {
     expect(parseCallNumbers('<table><tr><th>题名</th></tr><tr><td>思考</td></tr></table>')).toEqual(
       [],
