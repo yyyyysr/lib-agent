@@ -181,11 +181,15 @@ export function makeArtworkPng(width = 600, height = 800, seed = 1): Uint8Array 
 }
 
 /** 按任务代号回答的脚本化模型；可按任务覆盖返回值，用于测试校验与重试路径 */
-export function createScriptedModel(overrides: Record<string, ScriptHandler> = {}) {
+export function createScriptedModel(
+  overrides: Record<string, ScriptHandler> = {},
+  { delayMs = 0 }: { delayMs?: number } = {},
+) {
   const calls: { task: string; prompt: string }[] = [];
   const counter = new Map<string, number>();
   const model = new MockLanguageModelV4({
     doGenerate: async (options: CallOptions): Promise<GenerateResult> => {
+      if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
       const { task, prompt } = textOf(options);
       const n = (counter.get(task) ?? 0) + 1;
       counter.set(task, n);

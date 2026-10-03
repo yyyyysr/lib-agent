@@ -29,7 +29,7 @@ let userDataDir: string;
 
 const accounts = {
   admin: { username: 'super_user', password: '12345678', name: '超级管理员', no: 'ADMIN' },
-  curator: { username: 'lixiaoyu', password: 'curator-2026', name: '李晓雨', no: '2024010203' },
+  curator: { username: 'yangsiran', password: 'curator-2026', name: '杨斯然', no: '2024010203' },
   reviewer: { username: 'wanglaoshi', password: 'reviewer-2026', name: '王老师', no: 'T9001' },
 };
 type Account = (typeof accounts)[keyof typeof accounts];
@@ -94,7 +94,7 @@ async function register(account: Account, capture = false): Promise<void> {
   await d.getByLabel('学号 / 工号').fill(account.no);
   await d
     .getByLabel('学院 / 部门（可选）')
-    .fill(account === accounts.curator ? '新闻与传播学院' : '图书馆阅读推广部');
+    .fill(account === accounts.curator ? '信息管理学院' : '图书馆阅读推广部');
   await d.getByLabel(/记住密码/).check();
   if (capture) await shot('manual', '05-register');
   await d.getByRole('button', { name: '注册并登录' }).click();

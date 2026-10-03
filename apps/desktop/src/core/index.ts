@@ -33,7 +33,9 @@ const scriptMode = process.env.YYS_E2E_SCRIPTED_MODEL;
 const testing =
   scriptMode === '1' || scriptMode === 'demo' ? await import('@yys/agent-core/testing') : null;
 const scriptedModel = testing
-  ? testing.createScriptedModel(scriptMode === 'demo' ? testing.demoScript : {}).model
+  ? testing.createScriptedModel(scriptMode === 'demo' ? testing.demoScript : {}, {
+      delayMs: Number(process.env.YYS_DEMO_MODEL_DELAY_MS) || 0,
+    }).model
   : null;
 const demoArtwork =
   scriptMode === 'demo' && process.env.YYS_DEMO_ARTWORK
