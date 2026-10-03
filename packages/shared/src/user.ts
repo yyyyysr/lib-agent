@@ -70,9 +70,11 @@ export interface AuthStatus {
   };
 }
 
-/** 本机“记住密码”的账号在密钥保险箱中的引用 */
-export const secretRefForAccount = (username: string): string =>
-  `account:${username.toLowerCase()}`;
+/** 本机“记住密码”的账号在密钥保险箱中的引用；连接服务器时按服务器区分（scope 见 ConnectionInfo） */
+export const secretRefForAccount = (username: string, scope = 'local'): string =>
+  scope === 'local'
+    ? `account:${username.toLowerCase()}`
+    : `account:${scope}.${username.toLowerCase()}`;
 
 export interface AuthResult {
   token: string;

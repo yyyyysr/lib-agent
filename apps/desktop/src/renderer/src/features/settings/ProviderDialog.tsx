@@ -159,7 +159,7 @@ export function ProviderDialog({
       shared,
     });
     if (apiKey.trim()) {
-      await window.yys.secrets.set(saved.secretRef, apiKey.trim());
+      await core.call('providers.setKey', { providerId: saved.id, apiKey: apiKey.trim() });
       setApiKey('');
       setKeySaved(true);
     }

@@ -133,6 +133,7 @@ export function createModelServices(deps: CoreDeps) {
     | 'providers.list'
     | 'providers.save'
     | 'providers.delete'
+    | 'providers.setKey'
     | 'providers.listRemoteModels'
     | 'providers.test'
     | 'providers.testImage'
@@ -169,6 +170,12 @@ export function createModelServices(deps: CoreDeps) {
       });
       deps.emit('providers.changed', {});
       return withKeyStatus(saved);
+    },
+    'providers.setKey': async ({ providerId, apiKey }, { user }) => {
+      const config = manageable(user, providerId);
+      await secrets.set(config.secretRef, apiKey);
+      deps.emit('providers.changed', {});
+      return withKeyStatus(config);
     },
     'providers.delete': ({ id }, { user }) => {
       const config = manageable(user, id);

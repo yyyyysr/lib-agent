@@ -62,6 +62,8 @@ export interface AuthOptions {
   builtinAdmin: { username: string; password: string };
   /** 读取 / 删除“记住密码”保存在主进程保险箱中的密码 */
   secrets: { get(ref: string): Promise<string | null>; remove(ref: string): void };
+  /** 登录页提示内置管理员的初始密码；只在单机模式下开启，服务器上不得向任何人返回密码 */
+  revealDefaultPassword?: boolean;
 }
 
 export class AuthService {
@@ -96,7 +98,10 @@ export class AuthService {
     return {
       builtinAdmin: {
         username,
-        defaultPassword: admin?.mustChangePassword && admin.builtin ? password : undefined,
+        defaultPassword:
+          this.options.revealDefaultPassword !== false && admin?.mustChangePassword && admin.builtin
+            ? password
+            : undefined,
       },
     };
   }

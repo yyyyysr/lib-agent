@@ -1,0 +1,19 @@
+{
+  "name": "@yys/server",
+  "version": "0.4.0",
+  "private": true,
+  "description": "一页书展服务器：多台客户端共用一份书展、审批与书库数据",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "start": "node dist/server.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/ws": "8.18.2",
+    "@yys/core": "workspace:*",
+    "@yys/shared": "workspace:*",
+    "vite": "7.3.6",
+    "ws": "8.22.0"
+  }
+}

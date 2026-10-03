@@ -5,6 +5,7 @@ import { Button, EmptyState, Spinner, TooltipProvider } from '../components/ui';
 import { AdminView } from '../features/admin/AdminView';
 import { ApprovalsView } from '../features/approvals/ApprovalsView';
 import { AuthDialog } from '../features/auth/AuthDialog';
+import { ConnectionDialog } from '../features/connection/ConnectionDialog';
 import { CurationListView } from '../features/curation/CurationListView';
 import { ExhibitionView } from '../features/curation/ExhibitionView';
 import { LibraryView } from '../features/library/LibraryView';
@@ -136,6 +137,7 @@ export function App() {
         </main>
       </div>
       <AuthDialog />
+      <ConnectionDialog />
       <Toaster />
     </TooltipProvider>
   );

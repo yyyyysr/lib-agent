@@ -1,5 +1,3 @@
-import { readFile, stat } from 'node:fs/promises';
-import { basename } from 'node:path';
 import {
   AppError,
   DEFAULT_SCHOOL,
@@ -85,13 +83,12 @@ export function createBookServices(deps: CoreDeps) {
   > = {
     'books.sources': () => repos.books.listSources(),
     'books.search': (query) => repos.books.search(query),
-    'books.importFile': async ({ path, sourceName }, { user }) => {
-      const info = await stat(path).catch(() => null);
-      if (!info?.isFile()) throw new AppError('not_found', '找不到要导入的文件');
-      if (info.size > MAX_IMPORT_BYTES)
+    'books.importFile': async ({ fileName: rawName, data, sourceName }, { user }) => {
+      const bytes = new Uint8Array(Buffer.from(data, 'base64'));
+      if (bytes.length === 0) throw new AppError('import_failed', '文件是空的');
+      if (bytes.length > MAX_IMPORT_BYTES)
         throw new AppError('import_failed', '文件超过 20MB', '请拆分后分批导入');
-      const bytes = new Uint8Array(await readFile(path));
-      const fileName = basename(path);
+      const fileName = rawName.split(/[\\/]/).pop() || rawName;
       const parsed = await parseImport({ bytes, fileName }, nowIso());
       return finishImport(user, parsed, {
         kind: 'file',

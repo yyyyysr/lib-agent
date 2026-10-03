@@ -189,6 +189,10 @@ export const rpcParamSchemas = {
   'providers.list': z.void(),
   'providers.save': providerInputSchema,
   'providers.delete': id,
+  'providers.setKey': z.object({
+    providerId: z.string(),
+    apiKey: z.string().trim().min(1).max(4096),
+  }),
   'providers.listRemoteModels': z.object({ providerId: z.string() }),
   'providers.test': z.object({ providerId: z.string(), modelId: z.string() }),
   'providers.testImage': imageModelRefSchema,
@@ -203,7 +207,12 @@ export const rpcParamSchemas = {
 
   'books.sources': z.void(),
   'books.search': bookQuerySchema,
-  'books.importFile': z.object({ path: z.string().min(1), sourceName: z.string().optional() }),
+  /** 文件内容由客户端读取后以 base64 传入，后台服务（本机或服务器）不读取客户端的文件系统 */
+  'books.importFile': z.object({
+    fileName: z.string().min(1).max(255),
+    data: z.string().min(1).max(28_000_000),
+    sourceName: z.string().optional(),
+  }),
   'books.importText': z.object({
     text: z.string().min(1),
     format: importFormatSchema.exclude(['xlsx']),
@@ -255,6 +264,7 @@ export interface RpcResults {
   'providers.list': ProviderConfig[];
   'providers.save': ProviderConfig;
   'providers.delete': void;
+  'providers.setKey': ProviderConfig;
   'providers.listRemoteModels': ModelInfo[];
   'providers.test': ConnectionTestResult;
   'providers.testImage': ImageTestResult;
@@ -321,6 +331,7 @@ export const methodAccess = {
   'providers.list': 'user',
   'providers.save': 'user',
   'providers.delete': 'user',
+  'providers.setKey': 'user',
   'providers.listRemoteModels': 'user',
   'providers.test': 'user',
   'providers.testImage': 'user',

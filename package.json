@@ -13,9 +13,12 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sample:callnumbers": "node packages/book-sources/scripts/fetch-nlc-callnumbers.mjs",
+    "sample:covers": "node packages/book-sources/scripts/fetch-covers.mjs",
     "dist:mac": "pnpm --filter @yys/desktop dist:mac",
     "dist:win": "pnpm --filter @yys/desktop dist:win",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "server:build": "pnpm --filter @yys/server build",
+    "server:deploy": "deploy/deploy.sh"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

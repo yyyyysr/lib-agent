@@ -120,6 +120,7 @@ describe('Core：登录、权限与书展工作流（经 RPC）', () => {
     imagePrompts = [];
     const secrets = {
       get: async (ref: string) => vault.get(ref) ?? null,
+      set: async (ref: string, value: string) => void vault.set(ref, value),
       remove: (ref: string) => void vault.delete(ref),
     };
     const auth = new AuthService(repos, {

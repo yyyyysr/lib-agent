@@ -8,6 +8,7 @@ import {
 import log from 'electron-log/main';
 import { ipcChannels, type CoreStatus, type CoreToMain, type MainToCore } from '@yys/shared/ipc';
 import coreEntry from '../core/index?modulePath';
+import type { BackendHost } from './remote-host';
 import type { SecretVault } from './secrets';
 
 const MAX_RESTARTS = 5;
@@ -16,7 +17,7 @@ const RESTART_WINDOW_MS = 60_000;
 /**
  * 守护 Core utilityProcess：启动、崩溃后指数退避重启、为每个窗口分发直连 Core 的 MessagePort。
  */
-export class CoreHost {
+export class CoreHost implements BackendHost {
   private child: UtilityProcess | null = null;
   private ready = false;
   private stopping = false;
@@ -91,6 +92,10 @@ export class CoreHost {
         child.postMessage(reply);
         break;
       }
+      case 'secret:set':
+        // 只有服务商 API Key 经 Core 写入；账号密码由界面经主进程直接保存
+        if (message.ref.startsWith('provider:')) this.options.vault.set(message.ref, message.value);
+        break;
       case 'secret:remove':
         this.options.vault.remove(message.ref);
         break;

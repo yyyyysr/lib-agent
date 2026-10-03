@@ -41,6 +41,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.0
         version: 19.3.0(@types/react@19.3.0)
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
       '@vitejs/plugin-react':
         specifier: 5.2.0
         version: 5.2.0(supports-color@7.2.0)(vite@7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.32.0))
@@ -50,6 +53,9 @@ importers:
       '@yys/book-sources':
         specifier: workspace:*
         version: link:../../packages/book-sources
+      '@yys/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@yys/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -98,12 +104,33 @@ importers:
       vite:
         specifier: 7.3.6
         version: 7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.32.0)
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
       zod:
         specifier: 4.6.5
         version: 4.6.5
       zustand:
         specifier: 5.0.15
         version: 5.0.15(@types/react@19.3.0)(react@19.3.0)(use-sync-external-store@1.7.0(react@19.3.0))
+
+  apps/server:
+    devDependencies:
+      '@types/ws':
+        specifier: 8.18.2
+        version: 8.18.2
+      '@yys/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@yys/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      vite:
+        specifier: 7.3.6
+        version: 7.3.6(@types/node@24.19.0)(jiti@2.7.0)(lightningcss@1.32.0)
+      ws:
+        specifier: 8.22.0
+        version: 8.22.0
 
   packages/agent-core:
     dependencies:
@@ -135,6 +162,30 @@ importers:
       '@types/papaparse':
         specifier: ^5.3.16
         version: 5.5.2
+
+  packages/core:
+    dependencies:
+      '@yys/agent-core':
+        specifier: workspace:*
+        version: link:../agent-core
+      '@yys/book-sources':
+        specifier: workspace:*
+        version: link:../book-sources
+      '@yys/db':
+        specifier: workspace:*
+        version: link:../db
+      '@yys/llm-gateway':
+        specifier: workspace:*
+        version: link:../llm-gateway
+      '@yys/shared':
+        specifier: workspace:*
+        version: link:../shared
+      ai:
+        specifier: 7.0.127
+        version: 7.0.127(zod@4.6.5)
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/db:
     dependencies:
@@ -1756,6 +1807,9 @@ packages:
   '@types/responselike@1.0.3':
     resolution: {integrity: sha512-H/+L+UkTV33uf49PH5pCAUBVPNj2nDBXTN+qS1dOwyyg24l3CcicicCA7ca+HMvJBZcFgl5r8e+RR6elsb4Lyw==}
 
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
+
   '@vercel/oidc@3.2.0':
     resolution: {integrity: sha512-UycprH3T6n3jH0k44NHMa7pnFHGu/N05MjojYr+Mc6I7obkoLIJujSWwin1pCvdy/eOxrI/l3uDLQsmcrOb4ug==}
     engines: {node: '>= 20'}
@@ -3303,6 +3357,18 @@ packages:
 
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
+
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
 
   xmlbuilder@15.1.1:
     resolution: {integrity: sha512-yMqGBqtXyeN1e3TGYvgNgDVZ3j84W4cwkOXQswghol6APgZWaff9lnbvN7MHYJOiXsvGPXtjTYJEiC9J2wv9Eg==}
@@ -4862,6 +4928,10 @@ snapshots:
       csstype: 3.2.3
 
   '@types/responselike@1.0.3':
+    dependencies:
+      '@types/node': 24.19.0
+
+  '@types/ws@8.18.2':
     dependencies:
       '@types/node': 24.19.0
 
@@ -6511,6 +6581,8 @@ snapshots:
       strip-ansi: 6.0.1
 
   wrappy@1.0.2: {}
+
+  ws@8.22.0: {}
 
   xmlbuilder@15.1.1: {}
 

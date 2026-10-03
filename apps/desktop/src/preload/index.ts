@@ -2,6 +2,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   ipcChannels,
+  type ConnectionInfo,
   type CoreStatus,
   type DesktopBridge,
   type ThemeSource,
@@ -20,6 +21,12 @@ ipcRenderer.on(ipcChannels.corePort, (event) => {
 
 const bridge: DesktopBridge = {
   platform: process.platform as DesktopBridge['platform'],
+  connection: {
+    // 窗口加载时读取一次；切换连接时主进程会重新加载窗口
+    current: ipcRenderer.sendSync(ipcChannels.connectionCurrent) as ConnectionInfo,
+    probe: (url) => ipcRenderer.invoke(ipcChannels.connectionProbe, url),
+    use: (config) => ipcRenderer.invoke(ipcChannels.connectionUse, config),
+  },
   requestCorePort: () => ipcRenderer.send(ipcChannels.requestCorePort),
   onCoreStatus: (listener) => {
     const handler = (_event: Electron.IpcRendererEvent, status: CoreStatus): void =>

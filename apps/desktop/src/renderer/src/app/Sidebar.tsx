@@ -6,6 +6,7 @@ import {
   LogIn,
   LogOut,
   PanelLeft,
+  Server,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -77,6 +78,7 @@ export function Sidebar() {
   const isApprover = useRole('approver');
   const isAdmin = useRole('superadmin');
   const branding = useBranding();
+  const connection = window.yys.connection.current;
   const go = (target: View) => () => navigate(target);
   const at = (name: View['name']): boolean => view.name === name;
 
@@ -153,6 +155,16 @@ export function Sidebar() {
       <div className="flex-1" />
 
       <div className="space-y-0.5 border-t border-border p-2">
+        {connection.mode === 'server' && (
+          <button
+            onClick={go({ name: 'settings', section: 'data' })}
+            title={connection.url}
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[11px] text-subtle hover:bg-surface-hover"
+          >
+            <Server className="size-3.5 shrink-0 text-accent" />
+            <span className="truncate">已连接服务器 · {connection.name ?? connection.url}</span>
+          </button>
+        )}
         <NavItem
           icon={<Settings className="size-4" />}
           label="设置"

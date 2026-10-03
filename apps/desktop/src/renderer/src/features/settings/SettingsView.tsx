@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   Database,
+  HardDrive,
   Info,
   KeyRound,
   Monitor,
@@ -8,6 +9,7 @@ import {
   Pencil,
   Plus,
   School,
+  Server,
   Sun,
   Trash2,
   UserRound,
@@ -623,27 +625,62 @@ function AppearanceSection() {
 
 function DataSection() {
   const { data: info } = useRpc('app.info', undefined);
+  const connection = window.yys.connection.current;
+  const setConnectionDialog = useAppStore((s) => s.setConnectionDialog);
+  const remote = connection.mode === 'server';
   return (
     <div className="space-y-10">
       <Section
-        title="数据存储"
-        description="书目、对话与配置保存在本机 SQLite 数据库中，可随时备份或删除。"
+        title="连接"
+        description="使用本机数据，或连接团队服务器，让多台电脑共用书展、审批与书库数据。"
       >
         <div className="flex items-center gap-3 rounded-2xl border border-border p-4">
-          <code className="min-w-0 flex-1 truncate text-xs text-muted">{info?.dataDir ?? '…'}</code>
-          <Button size="sm" variant="outline" onClick={() => void window.yys.shell.showDataDir()}>
-            打开数据目录
+          {remote ? <Server className="size-4 text-accent" /> : <HardDrive className="size-4" />}
+          <div className="min-w-0 flex-1 text-[13px]">
+            <p className="font-medium">{remote ? (connection.name ?? '团队服务器') : '本机'}</p>
+            <p className="truncate text-xs text-muted">
+              {remote ? connection.url : '数据只保存在这台电脑上'}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setConnectionDialog(true)}>
+            更改连接
           </Button>
+        </div>
+      </Section>
+      <Section
+        title="数据存储"
+        description={
+          remote
+            ? '书目、书展与配置保存在服务器的 SQLite 数据库中，由服务器管理员负责备份。'
+            : '书目、书展与配置保存在本机 SQLite 数据库中，可随时备份或删除。'
+        }
+      >
+        <div className="flex items-center gap-3 rounded-2xl border border-border p-4">
+          <code className="min-w-0 flex-1 truncate text-xs text-muted">
+            {remote ? `服务器：${info?.dataDir ?? '…'}` : (info?.dataDir ?? '…')}
+          </code>
+          {!remote && (
+            <Button size="sm" variant="outline" onClick={() => void window.yys.shell.showDataDir()}>
+              打开数据目录
+            </Button>
+          )}
         </div>
       </Section>
       <Section title="数据流向">
         <ul className="list-disc space-y-2 pl-5 text-[13px] leading-relaxed text-muted">
           <li>
-            对话内容与完成任务所需的书目字段（书名、作者、索书号、主题词、摘要等）会发送给你选择的模型服务商；请求直接从本机发出，不经过第三方服务器。
+            {remote
+              ? '完成任务所需的书目字段（书名、作者、主题词、摘要等）由服务器发送给配置的模型服务商；客户端与服务器之间全程 HTTPS 加密，并固定服务器证书。'
+              : '完成任务所需的书目字段（书名、作者、主题词、摘要等）会发送给你选择的模型服务商；请求直接从本机发出，不经过第三方服务器。'}
+          </li>
+          <li>
+            {remote
+              ? '服务商 API Key 加密保存在服务器上，任何人都无法在客户端读回明文；“记住密码”只保存在本机。'
+              : 'API Key 与记住的密码用系统钥匙串加密保存在本机，界面无法读回明文。'}
           </li>
           <li>不收集、不上传学校账号密码与读者借阅记录。</li>
           <li>对数据外发有严格要求时，可使用 Ollama / LM Studio 本地模型，数据不离开本机。</li>
-          <li>示例书库中的索书号与链接为虚构示例，正式活动前需替换为学校真实馆藏。</li>
+          <li>示例书库的书目数据来自国家图书馆与豆瓣读书，不代表学校的真实馆藏。</li>
         </ul>
       </Section>
     </div>

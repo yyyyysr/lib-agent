@@ -2,7 +2,8 @@ import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { app, BrowserWindow } from 'electron';
 import log from 'electron-log/main';
-import { CoreHost } from './core-host';
+import { Backend } from './backend';
+import { ConnectionStore } from './connection';
 import { registerIpc } from './ipc';
 import { handleMediaProtocol, registerMediaScheme } from './media-protocol';
 import { installMenu } from './menu';
@@ -28,7 +29,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   let mainWindow: BrowserWindow | null = null;
-  let core: CoreHost | null = null;
+  let backend: Backend | null = null;
 
   app.on('second-instance', () => {
     if (!mainWindow) return;
@@ -42,12 +43,18 @@ if (!app.requestSingleInstanceLock()) {
     const bundledCovers = app.isPackaged
       ? join(process.resourcesPath, 'covers')
       : join(import.meta.dirname, '../../resources/covers');
-    handleMediaProtocol(dataDir, bundledCovers);
     const vault = new SecretVault(dataDir);
-    core = new CoreHost({ dataDir, appVersion: app.getVersion(), vault });
-    registerIpc({ core, vault, dataDir });
+    const current = new Backend({
+      dataDir,
+      appVersion: app.getVersion(),
+      vault,
+      store: new ConnectionStore(dataDir, !app.isPackaged),
+    });
+    backend = current;
+    handleMediaProtocol(dataDir, bundledCovers, () => current.pinnedServer());
+    registerIpc({ backend: current, vault, dataDir });
     installMenu();
-    core.start();
+    current.start();
     mainWindow = createMainWindow();
     mainWindow.on('closed', () => (mainWindow = null));
 
@@ -63,5 +70,5 @@ if (!app.requestSingleInstanceLock()) {
     if (process.platform !== 'darwin') app.quit();
   });
 
-  app.on('before-quit', () => core?.stop());
+  app.on('before-quit', () => backend?.stop());
 }

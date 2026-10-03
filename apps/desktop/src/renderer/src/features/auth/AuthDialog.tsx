@@ -1,9 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, ShieldCheck, X } from 'lucide-react';
+import { HardDrive, KeyRound, Server, ShieldCheck, X } from 'lucide-react';
 import { registerInputSchema, roleLabels, type AuthStatus } from '@yys/shared';
 import { Button, Dialog, Field, Input, Spinner } from '../../components/ui';
 import { core, errorText } from '../../lib/core-client';
-import { toast } from '../../store/app-store';
+import { toast, useAppStore } from '../../store/app-store';
 import { useAuth } from '../../store/auth-store';
 
 const emptyForm = {
@@ -66,6 +66,24 @@ function SavedAccounts({ onPick }: { onPick: (username: string) => void }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function ConnectionLine() {
+  const setConnectionDialog = useAppStore((s) => s.setConnectionDialog);
+  const { mode, url, name } = window.yys.connection.current;
+  return (
+    <p className="flex items-center justify-center gap-1.5 border-t border-border pt-3 text-xs text-subtle">
+      {mode === 'server' ? <Server className="size-3.5" /> : <HardDrive className="size-3.5" />}
+      {mode === 'server' ? `已连接服务器：${name ?? url}` : '使用本机数据'}
+      <button
+        type="button"
+        className="text-accent hover:underline"
+        onClick={() => setConnectionDialog(true)}
+      >
+        更改
+      </button>
+    </p>
   );
 }
 
@@ -251,6 +269,7 @@ export function AuthDialog() {
               {mode === 'login' ? '注册' : '登录'}
             </button>
           </p>
+          <ConnectionLine />
         </form>
       )}
     </Dialog>

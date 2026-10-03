@@ -84,11 +84,11 @@ export function useImportBooks(): {
   };
 
   const importFromFile = async (): Promise<void> => {
-    const path = await window.yys.dialog.openBookFile();
-    if (!path) return;
-    setBusy(true);
     try {
-      setReport(await core.call('books.importFile', { path }));
+      const file = await window.yys.dialog.openBookFile();
+      if (!file) return;
+      setBusy(true);
+      setReport(await core.call('books.importFile', { fileName: file.name, data: file.data }));
     } catch (error) {
       fail(error);
     } finally {

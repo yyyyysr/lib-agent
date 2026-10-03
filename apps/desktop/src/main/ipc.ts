@@ -1,5 +1,5 @@
-import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, stat, writeFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import {
   app,
   dialog,
@@ -9,11 +9,20 @@ import {
   BrowserWindow,
   type IpcMainInvokeEvent,
 } from 'electron';
-import { ipcChannels, supportedImportExtensions, type ThemeSource } from '@yys/shared/ipc';
-import type { CoreHost } from './core-host';
+import {
+  ipcChannels,
+  supportedImportExtensions,
+  type BookFile,
+  type ConnectionConfig,
+  type ThemeSource,
+} from '@yys/shared/ipc';
+import type { Backend } from './backend';
+import { friendlyNetworkError } from './server-tls';
 import type { SecretVault } from './secrets';
 
-const secretRefPattern = /^(provider|account):[A-Za-z0-9_.-]{1,64}$/;
+/** 界面只能保存“记住密码”；服务商 API Key 经 Core（本机或服务器）保存 */
+const secretRefPattern = /^account:[A-Za-z0-9_.-]{1,64}$/;
+const MAX_IMPORT_BYTES = 20 * 1024 * 1024;
 
 /** 去掉 Windows / macOS 文件名中不允许的字符 */
 const safeFileName = (name: string): string =>
@@ -40,10 +49,31 @@ function handle<T extends unknown[], R>(
   });
 }
 
-export function registerIpc(deps: { core: CoreHost; vault: SecretVault; dataDir: string }): void {
+export function registerIpc(deps: { backend: Backend; vault: SecretVault; dataDir: string }): void {
   ipcMain.on(ipcChannels.requestCorePort, (event) => {
     assertTrusted(event);
-    deps.core.connect(event.sender);
+    deps.backend.connect(event.sender);
+  });
+  // preload 加载时同步读取，此时页面地址尚未确定，无法做来源校验；内容只是连接方式与服务器地址，不含任何凭据
+  ipcMain.on(ipcChannels.connectionCurrent, (event) => {
+    event.returnValue = deps.backend.info;
+  });
+  handle(ipcChannels.connectionProbe, async (_e, url: unknown) => {
+    if (typeof url !== 'string' || url.length > 300) throw new Error('服务器地址不合法');
+    try {
+      return await deps.backend.probe(url);
+    } catch (error) {
+      throw friendlyNetworkError(error);
+    }
+  });
+  handle(ipcChannels.connectionUse, (_e, config: unknown) => {
+    const c = config as ConnectionConfig;
+    if (
+      c?.mode !== 'local' &&
+      !(c?.mode === 'server' && typeof c.url === 'string' && typeof c.fingerprint === 'string')
+    )
+      throw new Error('连接设置不合法');
+    deps.backend.use(c);
   });
 
   handle(ipcChannels.secretsSet, (_e, ref: unknown, value: unknown) => {
@@ -51,7 +81,7 @@ export function registerIpc(deps: { core: CoreHost; vault: SecretVault; dataDir:
     if (typeof value !== 'string' || value.length === 0 || value.length > 4096)
       throw new Error('无效的密钥内容');
     // 账号密码按原样保存；API Key 去除复制时带入的首尾空白
-    deps.vault.set(ref, ref.startsWith('account:') ? value : value.trim());
+    deps.vault.set(ref, value);
   });
   handle(ipcChannels.secretsRemove, (_e, ref: unknown) => {
     if (typeof ref === 'string' && secretRefPattern.test(ref)) deps.vault.remove(ref);
@@ -74,7 +104,15 @@ export function registerIpc(deps: { core: CoreHost; vault: SecretVault; dataDir:
     const result = win
       ? await dialog.showOpenDialog(win, options)
       : await dialog.showOpenDialog(options);
-    return result.canceled ? null : (result.filePaths[0] ?? null);
+    const path = result.canceled ? undefined : result.filePaths[0];
+    if (!path) return null;
+    const info = await stat(path);
+    if (info.size > MAX_IMPORT_BYTES) throw new Error('文件超过 20MB，请拆分后分批导入');
+    const file: BookFile = {
+      name: basename(path),
+      data: (await readFile(path)).toString('base64'),
+    };
+    return file;
   });
 
   handle(ipcChannels.saveText, async (event, defaultName: unknown, content: unknown) => {

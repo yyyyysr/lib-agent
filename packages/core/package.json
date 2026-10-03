@@ -1,0 +1,21 @@
+{
+  "name": "@yys/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@yys/agent-core": "workspace:*",
+    "@yys/book-sources": "workspace:*",
+    "@yys/db": "workspace:*",
+    "@yys/llm-gateway": "workspace:*",
+    "@yys/shared": "workspace:*",
+    "ai": "7.0.127",
+    "zod": "4.6.5"
+  }
+}

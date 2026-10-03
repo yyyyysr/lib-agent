@@ -24,6 +24,10 @@ export class SecretsClient {
     });
   }
 
+  async set(ref: string, value: string): Promise<void> {
+    this.post({ type: 'secret:set', ref, value });
+  }
+
   remove(ref: string): void {
     this.post({ type: 'secret:remove', ref });
   }

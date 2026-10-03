@@ -7,7 +7,7 @@ export function CoreStatusBanner() {
   if (status.state === 'starting') {
     return (
       <div className="flex items-center justify-center gap-2 bg-surface px-4 py-1.5 text-xs text-muted">
-        <Loader2 className="size-3.5 animate-spin" /> 正在启动后台服务…
+        <Loader2 className="size-3.5 animate-spin" /> {status.message ?? '正在启动后台服务…'}
       </div>
     );
   }

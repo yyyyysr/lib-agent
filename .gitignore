@@ -10,3 +10,8 @@ coverage/
 e2e-results/
 e2e-report/
 *.tsbuildinfo
+
+# 项目方案（不公开）
+一页书展_AI策展与运营智能体_项目方案.md
+# 示例书封面版权归出版方，打包前用 pnpm sample:covers 下载
+apps/desktop/resources/covers/

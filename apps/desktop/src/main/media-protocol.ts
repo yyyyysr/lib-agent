@@ -4,8 +4,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { net, protocol } from 'electron';
 import log from 'electron-log/main';
-import { MEDIA_SCHEME, mediaIdPattern } from '@yys/shared/ipc';
+import { MEDIA_SCHEME, mediaIdPattern, serverMediaPath } from '@yys/shared/ipc';
 import { sniffImageType } from './image-type';
+import { pinnedGet, type PinnedServer } from './server-tls';
 
 const MEDIA_TYPES: Record<string, string> = {
   png: 'image/png',
@@ -36,7 +37,21 @@ const imageResponse = (data: Buffer, type: string): Response =>
 /** 封面地址的缓存键；随应用附带的封面（bundledCoverDir）也以此命名 */
 export const coverKey = (source: string): string => createHash('sha1').update(source).digest('hex');
 
-export function handleMediaProtocol(dataDir: string, bundledCoverDir?: string): void {
+const MAX_MEDIA_BYTES = 15 * 1024 * 1024;
+const EXTENSIONS: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
+/**
+ * remoteServer：连接团队服务器时返回服务器信息；本机没有的生成图片从服务器下载并缓存。
+ */
+export function handleMediaProtocol(
+  dataDir: string,
+  bundledCoverDir?: string,
+  remoteServer?: () => PinnedServer | null,
+): void {
   const mediaDir = join(dataDir, 'media');
   const coverDir = join(dataDir, 'covers');
   mkdirSync(coverDir, { recursive: true });
@@ -48,7 +63,20 @@ export function handleMediaProtocol(dataDir: string, bundledCoverDir?: string): 
       const file = join(mediaDir, `${id}.${ext}`);
       if (existsSync(file)) return imageResponse(await readFile(file), type);
     }
-    return notFound();
+    const server = remoteServer?.();
+    if (!server) return notFound();
+    try {
+      const { status, data } = await pinnedGet(server, serverMediaPath(id), MAX_MEDIA_BYTES);
+      const type = status === 200 ? sniffImageType(data) : null;
+      const ext = type ? EXTENSIONS[type] : undefined;
+      if (!type || !ext) return notFound();
+      mkdirSync(mediaDir, { recursive: true });
+      await writeFile(join(mediaDir, `${id}.${ext}`), data);
+      return imageResponse(data, type);
+    } catch (error) {
+      log.warn(`[media] 无法从服务器下载 ${id}：${(error as Error).message}`);
+      return notFound();
+    }
   }
 
   /** 首次以普通请求下载并缓存；失败的地址一天内不再重试，避免拖慢列表 */

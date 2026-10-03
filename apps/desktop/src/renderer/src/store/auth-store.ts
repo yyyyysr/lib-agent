@@ -10,8 +10,11 @@ import { core, errorText } from '../lib/core-client';
 import { useAgentRuns } from './agent-runs';
 import { toast, useToasts } from './app-store';
 
-const TOKEN_KEY = 'yys-session';
-const ACCOUNTS_KEY = 'yys-accounts';
+// 本机与各个服务器的登录令牌、账号列表、记住的密码分开保存
+const { scope } = window.yys.connection.current;
+const TOKEN_KEY = scope === 'local' ? 'yys-session' : `yys-session:${scope}`;
+const ACCOUNTS_KEY = scope === 'local' ? 'yys-accounts' : `yys-accounts:${scope}`;
+const accountRef = (username: string): string => secretRefForAccount(username, scope);
 
 /** 本机登录过的账号；只保存用于展示的信息，密码（若记住）加密保存在主进程保险箱 */
 export interface SavedAccount {
@@ -129,7 +132,7 @@ export const useAuth = create<AuthState>((set, get) => {
       if (get().user) await core.call('auth.logout').catch(() => undefined);
       localStorage.setItem(TOKEN_KEY, token);
       core.setToken(token);
-      const ref = secretRefForAccount(user.username);
+      const ref = accountRef(user.username);
       if (options.remember === true && options.password)
         await window.yys.secrets.set(ref, options.password);
       if (options.remember === false) await window.yys.secrets.remove(ref);
@@ -172,7 +175,7 @@ export const useAuth = create<AuthState>((set, get) => {
     },
 
     forgetAccount: async (username) => {
-      await window.yys.secrets.remove(secretRefForAccount(username));
+      await window.yys.secrets.remove(accountRef(username));
       set({
         accounts: persistAccounts(get().accounts.filter((a) => !sameUser(a.username, username))),
       });
@@ -181,7 +184,7 @@ export const useAuth = create<AuthState>((set, get) => {
     passwordChanged: async (user, newPassword) => {
       const account = get().accounts.find((a) => sameUser(a.username, user.username));
       if (account?.rememberPassword)
-        await window.yys.secrets.set(secretRefForAccount(user.username), newPassword);
+        await window.yys.secrets.set(accountRef(user.username), newPassword);
       set({ user });
       upsertAccount(user);
     },

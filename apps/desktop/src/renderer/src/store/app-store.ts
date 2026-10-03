@@ -21,6 +21,8 @@ interface AppState {
   view: View;
   sidebarOpen: boolean;
   coreStatus: CoreStatus;
+  connectionDialog: boolean;
+  setConnectionDialog: (open: boolean) => void;
   navigate: (view: View) => void;
   toggleSidebar: () => void;
   setCoreStatus: (status: CoreStatus) => void;
@@ -30,6 +32,8 @@ export const useAppStore = create<AppState>((set) => ({
   view: { name: 'home' },
   sidebarOpen: true,
   coreStatus: { state: 'starting' },
+  connectionDialog: false,
+  setConnectionDialog: (connectionDialog) => set({ connectionDialog }),
   navigate: (view) => set({ view }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setCoreStatus: (coreStatus) => set({ coreStatus }),

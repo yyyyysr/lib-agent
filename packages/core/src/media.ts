@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { AppError } from '@yys/shared';
+import { AppError, mediaIdPattern } from '@yys/shared';
 
 const extensions: Record<string, string> = {
   'image/png': 'png',
@@ -27,5 +27,15 @@ export class MediaStore {
     const id = `img_${randomBytes(8).toString('hex')}`;
     writeFileSync(join(this.dir, `${id}.${ext}`), data);
     return id;
+  }
+
+  /** 按编号找到已保存的图片；编号格式不对或文件不存在时返回 null */
+  find(id: string): { path: string; mediaType: string } | null {
+    if (!mediaIdPattern.test(id)) return null;
+    for (const [mediaType, ext] of Object.entries(extensions)) {
+      const path = join(this.dir, `${id}.${ext}`);
+      if (existsSync(path)) return { path, mediaType };
+    }
+    return null;
   }
 }
