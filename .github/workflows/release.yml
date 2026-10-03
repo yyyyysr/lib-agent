@@ -1,0 +1,56 @@
+name: Release
+
+# 在 GitHub 上发布 Release（如 v0.4.0）后自动打包 macOS 与 Windows 安装包并附加到该 Release；
+# 也可在 Actions 页面手动运行，产物保存为构建附件。
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS（arm64 + x64）
+            os: macos-latest
+            script: dist:mac
+            files: |
+              apps/desktop/release/*/*.dmg
+          - name: Windows（x64 + arm64）
+            os: windows-latest
+            script: dist:win
+            files: |
+              apps/desktop/release/*/*.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 打包
+        run: pnpm --filter @yys/desktop ${{ matrix.script }}
+        env:
+          # 未配置签名证书：生成未签名包（macOS 为 ad-hoc 签名）
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: 检查打包后的应用能否启动
+        run: node apps/desktop/scripts/smoke-packaged.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+      - name: 附加到 Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ matrix.files }}
