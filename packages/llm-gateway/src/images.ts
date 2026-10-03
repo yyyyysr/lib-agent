@@ -70,8 +70,11 @@ function decodeBase64Image(value: string): Uint8Array {
 }
 
 /**
- * MiniMax 原生生图：POST {baseURL}/image_generation
- * 请求体用 aspect_ratio + response_format=base64，响应在 data.image_base64 / image_urls。
+ * MiniMax 原生生图，对齐官方 curl：
+ * POST {base}/image_generation
+ * Authorization: Bearer
+ * Content-Type: application/json
+ * { model, prompt, aspect_ratio, response_format, n, prompt_optimizer }
  */
 async function viaNativeImageGeneration(
   ctx: ProviderContext,
@@ -81,67 +84,74 @@ async function viaNativeImageGeneration(
 ): Promise<GeneratedImage> {
   const doFetch = ctx.fetch ?? globalThis.fetch;
   const url = `${ctx.baseURL}/image_generation`;
-  const body = {
-    model: modelId,
-    prompt,
-    aspect_ratio: POSTER_ASPECT_RATIO,
-    response_format: 'base64' as const,
-    n: 1,
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+    ...(ctx.apiKey ? { Authorization: `Bearer ${ctx.apiKey}` } : {}),
   };
-  const response = await doFetch(url, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json',
-      ...(ctx.apiKey ? { authorization: `Bearer ${ctx.apiKey}` } : {}),
-    },
-    body: JSON.stringify(body),
-    signal: withTimeout(signal),
-  });
-  const text = await response.text();
-  let json: {
-    data?: { image_base64?: string[]; image_urls?: string[] };
-    base_resp?: { status_code?: number; status_msg?: string };
+
+  const request = async (responseFormat: 'url' | 'base64') => {
+    const body = {
+      model: modelId,
+      prompt,
+      aspect_ratio: POSTER_ASPECT_RATIO,
+      response_format: responseFormat,
+      n: 1,
+      prompt_optimizer: true,
+    };
+    const response = await doFetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: withTimeout(signal),
+    });
+    const text = await response.text();
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(text) as Record<string, unknown>;
+    } catch {
+      throw new APICallError({
+        message: `HTTP ${response.status}`,
+        url,
+        requestBodyValues: body,
+        statusCode: response.status,
+        responseBody: text,
+      });
+    }
+    const baseResp = json.base_resp as { status_code?: number; status_msg?: string } | undefined;
+    const statusCode = baseResp?.status_code;
+    if (!response.ok || (statusCode !== undefined && statusCode !== 0)) {
+      throw new APICallError({
+        message: baseResp?.status_msg || `HTTP ${response.status}`,
+        url,
+        requestBodyValues: body,
+        statusCode:
+          !response.ok
+            ? response.status
+            : statusCode === 1004 || statusCode === 2049
+              ? 401
+              : statusCode === 1008
+                ? 402
+                : statusCode === 1002
+                  ? 429
+                  : statusCode === 1026
+                    ? 400
+                    : 400,
+        responseBody: text,
+      });
+    }
+    return collectNativeImages(json);
   };
-  try {
-    json = JSON.parse(text) as typeof json;
-  } catch {
-    throw new APICallError({
-      message: `HTTP ${response.status}`,
-      url,
-      requestBodyValues: body,
-      statusCode: response.status,
-      responseBody: text,
-    });
-  }
 
-  const statusCode = json.base_resp?.status_code;
-  if (!response.ok || (statusCode !== undefined && statusCode !== 0)) {
-    throw new APICallError({
-      message: json.base_resp?.status_msg || `HTTP ${response.status}`,
-      url,
-      requestBodyValues: body,
-      statusCode:
-        !response.ok
-          ? response.status
-          : statusCode === 1004 || statusCode === 2049
-            ? 401
-            : statusCode === 1008
-              ? 402
-              : statusCode === 1002
-                ? 429
-                : 400,
-      responseBody: text,
-    });
-  }
+  let payload = await request('url');
+  if (!payload.urls[0] && !payload.b64[0]) payload = await request('base64');
 
-  const b64 = json.data?.image_base64?.[0];
-  if (b64) {
-    const data = decodeBase64Image(b64);
+  if (payload.b64[0]) {
+    const data = decodeBase64Image(payload.b64[0]);
     return { data, mediaType: sniffMediaType(data) };
   }
 
-  const imageUrl = json.data?.image_urls?.[0];
+  const imageUrl = payload.urls[0];
   if (imageUrl) {
     const imgRes = await doFetch(imageUrl, { signal: withTimeout(signal) });
     if (!imgRes.ok) {
@@ -154,15 +164,41 @@ async function viaNativeImageGeneration(
       });
     }
     const data = new Uint8Array(await imgRes.arrayBuffer());
-    const mediaType = imgRes.headers.get('content-type')?.split(';')[0]?.trim() || sniffMediaType(data);
+    const mediaType =
+      imgRes.headers.get('content-type')?.split(';')[0]?.trim() || sniffMediaType(data);
     return { data, mediaType };
   }
 
   throw new AppError(
     'internal',
     '生图接口没有返回图片',
-    '请确认模型名称正确（如 image-01），并检查账户余额与内容安全策略',
+    '请确认模型名称是 image-01 或 image-01-live，并检查账户余额与内容安全策略',
   );
+}
+
+function collectNativeImages(json: Record<string, unknown>): { b64: string[]; urls: string[] } {
+  const b64: string[] = [];
+  const urls: string[] = [];
+  const push = (value: unknown, into: string[]) => {
+    if (typeof value === 'string' && value) into.push(value);
+    else if (Array.isArray(value)) for (const item of value) push(item, into);
+  };
+  const data = json.data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const row = data as Record<string, unknown>;
+    push(row.image_base64, b64);
+    push(row.image_urls, urls);
+    push(row.images, urls);
+  }
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      if (!item || typeof item !== 'object') continue;
+      const row = item as Record<string, unknown>;
+      if (typeof row.b64_json === 'string') b64.push(row.b64_json);
+      if (typeof row.url === 'string') urls.push(row.url);
+    }
+  }
+  return { b64, urls };
 }
 
 function imageModelFor(ctx: ProviderContext, modelId: string): ImageModel {

@@ -1,9 +1,11 @@
 import type { LanguageModel } from 'ai';
 import {
   AppError,
+  isImageGenerationModel,
   modelRolesSchema,
   newId,
   nowIso,
+  purposeForModel,
   secretRefForProvider,
   type ImageModelRef,
   type ModelInfo,
@@ -152,9 +154,9 @@ export function createModelServices(deps: CoreDeps) {
       const id = existing?.id ?? newId('prov');
       const at = nowIso();
       const seen = new Set<string>();
-      const models = input.models.filter(
-        (model) => model.id.trim() && !seen.has(model.id) && seen.add(model.id),
-      );
+      const models = input.models
+        .filter((model) => model.id.trim() && !seen.has(model.id) && seen.add(model.id))
+        .map((model) => ({ ...model, purpose: purposeForModel(model.id, model.purpose) }));
       const saved = repos.providers.upsert({
         id,
         presetId: preset.id,
@@ -211,6 +213,30 @@ export function createModelServices(deps: CoreDeps) {
         ctx = await providerContext(config);
       } catch (error) {
         return { ok: false, error: mapProviderError(error) };
+      }
+      if (isImageGenerationModel(modelId)) {
+        const started = Date.now();
+        try {
+          await createImageGen(ctx, modelId, 'image')(TEST_IMAGE_PROMPT, { signal });
+          const tested = {
+            purpose: 'image' as const,
+            capabilities: { structuredOutput: 'none' as const, toolCalling: 'no' as const },
+            testedAt: nowIso(),
+          };
+          const models: ModelInfo[] = config.models.some((m) => m.id === modelId)
+            ? config.models.map((m) => (m.id === modelId ? { ...m, ...tested } : m))
+            : [...config.models, { id: modelId, ...tested }];
+          repos.providers.upsert({ ...config, models, updatedAt: nowIso() });
+          deps.emit('providers.changed', {});
+          return {
+            ok: true,
+            latencyMs: Date.now() - started,
+            capabilities: tested.capabilities,
+            sample: '生图接口可用',
+          };
+        } catch (error) {
+          return { ok: false, error: mapProviderError(error) };
+        }
       }
       const result = await testConnection(createModel(ctx, modelId), signal);
       if (result.ok) {

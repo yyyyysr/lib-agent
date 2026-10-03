@@ -20,12 +20,13 @@ import {
   profileSchema,
   roleLabels,
   schoolProfileSchema,
+  isImageGenerationModel,
+  mergeProviderPresets,
   type ProviderConfig,
   type SchoolProfile,
   type ThemeSource,
   type ImageTestResult,
 } from '@yys/shared';
-import { mergeProviderPresets } from '@yys/shared';
 import { mediaUrl } from '@yys/shared/ipc';
 import { TopBar } from '../../app/TopBar';
 import {
@@ -130,8 +131,6 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
   const [result, setResult] = useState<ImageTestResult | null>(null);
   const key = (o: ModelOption): string => `${o.providerId}::${o.modelId}`;
   const mode = image?.mode ?? 'image';
-  const imageLike = (modelId: string): boolean =>
-    /image-0|imagen|dall-?e|flux|kolors|seedream|gpt-image/i.test(modelId);
 
   const test = async (): Promise<void> => {
     if (!image) return;
@@ -159,7 +158,8 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
             用于 AI 绘制海报画面。可选专门的生图接口（如 gpt-image-1、Imagen、豆包
             Seedream、MiniMax image-01、硅基流动 Kolors/FLUX），或能输出图片的多模态模型（如
             gemini-2.5-flash-image）。请先点上方「添加服务商」：国内服务商里有「MiniMax
-            海螺」，会预填对话模型 MiniMax-M3 与生图模型 image-01。
+            海螺」，会预填对话模型 MiniMax-M3 与生图模型 image-01。生图走官方
+            POST /v1/image_generation（Bearer），不要用「测试连接」去测 image-01。
             {isAdmin && ' 配置在“全员共享”服务商上的生图模型，其他用户未配置时也能使用。'}
           </p>
         </div>
@@ -176,7 +176,7 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
                   ? {
                       providerId: option.providerId,
                       modelId: option.modelId,
-                      mode: imageLike(option.modelId) ? 'image' : mode,
+                      mode: isImageGenerationModel(option.modelId) ? 'image' : mode,
                     }
                   : null,
               });
@@ -256,6 +256,8 @@ function ModelsSection() {
 
   const primary = options.find((o) => sameRef(o, roles?.primary)) ?? null;
   const fast = options.find((o) => sameRef(o, roles?.fast)) ?? null;
+  const chatOptions = options.filter((o) => o.purpose !== 'image');
+  const imageOptions = options.filter((o) => o.purpose === 'image');
 
   const remove = async (): Promise<void> => {
     if (!pendingDelete) return;
@@ -359,7 +361,7 @@ function ModelsSection() {
               label="主模型"
               hint="建议选择通过测试、支持工具调用与结构化输出的模型"
               value={primary}
-              options={options}
+              options={chatOptions}
               onChange={(o) =>
                 o && void setRoles({ primary: { providerId: o.providerId, modelId: o.modelId } })
               }
@@ -368,14 +370,14 @@ function ModelsSection() {
               label="快速模型"
               hint="留空则使用主模型"
               value={fast}
-              options={options}
+              options={chatOptions}
               allowEmpty
               onChange={(o) =>
                 void setRoles({ fast: o ? { providerId: o.providerId, modelId: o.modelId } : null })
               }
             />
           </div>
-          <ImageModelPanel options={options} />
+          <ImageModelPanel options={imageOptions.length > 0 ? imageOptions : options} />
         </Section>
       )}
 

@@ -4,17 +4,25 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { APICallError, type LanguageModel } from 'ai';
-import { AppError, type ModelInfo, type ProviderConfig, type ProviderPreset } from '@yys/shared';
+import { AppError, purposeForModel, type ModelInfo, type ProviderConfig } from '@yys/shared';
 import { getPreset } from './presets';
 
 export type FetchFunction = typeof globalThis.fetch;
 
 export interface ProviderContext {
   config: ProviderConfig;
-  preset: ProviderPreset;
+  preset: NonNullable<ReturnType<typeof getPreset>>;
   apiKey: string | null;
   baseURL: string;
   fetch?: FetchFunction;
+}
+
+/** 用户可能把 curl 里的完整路径贴进 Base URL，去掉末端具体接口名，只保留 /v1 */
+export function normalizeProviderBaseURL(url: string): string {
+  return url
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/(image_generation|images\/generations|chat\/completions)$/i, '');
 }
 
 export function resolveProvider(
@@ -24,7 +32,7 @@ export function resolveProvider(
 ): ProviderContext {
   const preset = getPreset(config.presetId);
   if (!preset) throw new AppError('not_configured', `未知的服务商类型：${config.presetId}`);
-  const baseURL = (config.baseURL?.trim() || preset.defaultBaseURL || '').replace(/\/+$/, '');
+  const baseURL = normalizeProviderBaseURL(config.baseURL?.trim() || preset.defaultBaseURL || '');
   if (!baseURL)
     throw new AppError(
       'not_configured',
@@ -47,7 +55,6 @@ export function createLanguageModel(ctx: ProviderContext, modelId: string): Lang
   switch (ctx.preset.kind) {
     case 'openai': {
       const provider = createOpenAI({ apiKey, baseURL, fetch });
-      // 官方地址走 Responses API；自定义地址多为第三方转发，只保证 Chat Completions
       return baseURL === ctx.preset.defaultBaseURL ? provider(modelId) : provider.chat(modelId);
     }
     case 'anthropic':
@@ -94,55 +101,90 @@ async function getJson(
   return JSON.parse(text) as unknown;
 }
 
-/** 从服务商拉取可用模型列表；部分服务商不提供该接口时由用户手动填写 */
+function idsFromModelList(json: unknown): { id: string; label?: string }[] {
+  if (!json || typeof json !== 'object') return [];
+  const root = json as {
+    data?: unknown;
+    models?: { name?: string; id?: string; displayName?: string; display_name?: string }[];
+  };
+  if (Array.isArray(root.data)) {
+    return root.data
+      .map((item) => {
+        if (typeof item === 'string') return { id: item };
+        if (item && typeof item === 'object' && 'id' in item && typeof item.id === 'string') {
+          const row = item as { id: string; display_name?: string };
+          return { id: row.id, label: row.display_name };
+        }
+        return { id: '' };
+      })
+      .filter((m) => m.id);
+  }
+  return (root.models ?? [])
+    .map((m) => ({
+      id: (m.id || m.name || '').replace(/^models\//, ''),
+      label: m.displayName ?? m.display_name,
+    }))
+    .filter((m) => m.id);
+}
+
+/** 从服务商拉取可用模型列表；生图模型（如 image-01）不会出现在对话 /models 里，用预设补上 */
 export async function listRemoteModels(
   ctx: ProviderContext,
   signal?: AbortSignal,
 ): Promise<ModelInfo[]> {
   const key = ctx.apiKey ?? '';
-  let ids: { id: string; label?: string }[];
-  switch (ctx.preset.kind) {
-    case 'anthropic': {
-      const json = (await getJson(
-        ctx,
-        `${ctx.baseURL}/models?limit=100`,
-        { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-        signal,
-      )) as {
-        data?: { id: string; display_name?: string }[];
-      };
-      ids = (json.data ?? []).map((m) => ({ id: m.id, label: m.display_name }));
-      break;
+  let ids: { id: string; label?: string }[] = [];
+  try {
+    switch (ctx.preset.kind) {
+      case 'anthropic': {
+        const json = await getJson(
+          ctx,
+          `${ctx.baseURL}/models?limit=100`,
+          { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+          signal,
+        );
+        ids = idsFromModelList(json);
+        break;
+      }
+      case 'google': {
+        const json = (await getJson(
+          ctx,
+          `${ctx.baseURL}/models?pageSize=200`,
+          { 'x-goog-api-key': key },
+          signal,
+        )) as {
+          models?: { name: string; displayName?: string; supportedGenerationMethods?: string[] }[];
+        };
+        ids = (json.models ?? [])
+          .filter(
+            (m) =>
+              !m.supportedGenerationMethods ||
+              m.supportedGenerationMethods.includes('generateContent'),
+          )
+          .map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName }));
+        break;
+      }
+      default: {
+        const headers: Record<string, string> = key ? { authorization: `Bearer ${key}` } : {};
+        ids = idsFromModelList(await getJson(ctx, `${ctx.baseURL}/models`, headers, signal));
+      }
     }
-    case 'google': {
-      const json = (await getJson(
-        ctx,
-        `${ctx.baseURL}/models?pageSize=200`,
-        { 'x-goog-api-key': key },
-        signal,
-      )) as {
-        models?: { name: string; displayName?: string; supportedGenerationMethods?: string[] }[];
-      };
-      ids = (json.models ?? [])
-        .filter(
-          (m) =>
-            !m.supportedGenerationMethods ||
-            m.supportedGenerationMethods.includes('generateContent'),
-        )
-        .map((m) => ({ id: m.name.replace(/^models\//, ''), label: m.displayName }));
-      break;
-    }
-    default: {
-      const headers: Record<string, string> = key ? { authorization: `Bearer ${key}` } : {};
-      const json = (await getJson(ctx, `${ctx.baseURL}/models`, headers, signal)) as {
-        data?: { id: string }[];
-      };
-      ids = (json.data ?? []).map((m) => ({ id: m.id }));
-    }
+  } catch (error) {
+    if (!ctx.preset.suggestedModels?.length) throw error;
+    ids = [];
   }
+
+  for (const suggested of ctx.preset.suggestedModels ?? []) {
+    if (!ids.some((m) => m.id === suggested.id)) ids.push(suggested);
+  }
+
   const seen = new Set<string>();
   return ids
     .filter((m) => m.id && !nonChatModel.test(m.id) && !seen.has(m.id) && seen.add(m.id))
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((m) => (m.label && m.label !== m.id ? { id: m.id, label: m.label } : { id: m.id }));
+    .map((m) => ({
+      id: m.id,
+      ...(m.label && m.label !== m.id ? { label: m.label } : {}),
+      purpose: purposeForModel(m.id),
+    }));
 }

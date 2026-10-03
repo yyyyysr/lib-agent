@@ -64,6 +64,7 @@ export const providerPresets: ProviderPreset[] = [
     suggestedModels: [
       { id: 'MiniMax-M3', label: '对话' },
       { id: 'image-01', label: '生图' },
+      { id: 'image-01-live', label: '生图（画风）' },
     ],
   },
   {

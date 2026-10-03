@@ -9,7 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { ConnectionTestResult, ModelInfo, ProviderConfig, ProviderPreset } from '@yys/shared';
-import { mergeProviderPresets } from '@yys/shared';
+import { isImageGenerationModel, mergeProviderPresets } from '@yys/shared';
 import { Badge, Button, Dialog, Field, Input } from '../../components/ui';
 import { cn } from '../../lib/cn';
 import { core, errorText } from '../../lib/core-client';
@@ -26,6 +26,9 @@ const groupLabels: Record<ProviderPreset['group'], string> = {
 };
 
 export function CapabilityBadges({ model }: { model: ModelInfo }) {
+  if (model.purpose === 'image' || isImageGenerationModel(model.id)) {
+    return <Badge tone="accent">生图接口</Badge>;
+  }
   const caps = model.capabilities;
   if (!caps) return <Badge>未测试</Badge>;
   return (
@@ -64,8 +67,10 @@ function TestResultView({ result }: { result: ConnectionTestResult }) {
       </div>
     );
   }
+  const imageOk = result.sample === '生图接口可用';
   const usable =
-    result.capabilities.toolCalling === 'yes' && result.capabilities.structuredOutput !== 'none';
+    imageOk ||
+    (result.capabilities.toolCalling === 'yes' && result.capabilities.structuredOutput !== 'none');
   return (
     <div className="flex gap-2.5 rounded-xl bg-accent-soft p-3">
       <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />
@@ -133,7 +138,7 @@ export function ProviderDialog({
   const addModel = (id: string): void => {
     const value = id.trim();
     if (!value || models.some((m) => m.id === value)) return;
-    setModels((list) => [...list, { id: value }]);
+    setModels((list) => [...list, { id: value, purpose: isImageGenerationModel(value) ? 'image' : 'chat' }]);
     if (!testModel) setTestModel(value);
   };
 
@@ -167,11 +172,17 @@ export function ProviderDialog({
     setSavedId(saved.id);
     // 读取最新的模型分工：对话框打开后可能已有其他服务商被设为主模型；保留已选的快速与生图模型
     const current = await core.call('settings.getModelRoles');
-    if (!current.primary && allModels[0]) {
-      await core.call('settings.setModelRoles', {
-        ...current,
-        primary: { providerId: saved.id, modelId: allModels[0].id },
-      });
+    const chatModel = allModels.find((m) => !isImageGenerationModel(m.id));
+    const imageModel = allModels.find((m) => isImageGenerationModel(m.id));
+    const next = { ...current };
+    if (!current.primary && chatModel) {
+      next.primary = { providerId: saved.id, modelId: chatModel.id };
+    }
+    if (!current.image && imageModel) {
+      next.image = { providerId: saved.id, modelId: imageModel.id, mode: 'image' };
+    }
+    if (next.primary !== current.primary || next.image !== current.image) {
+      await core.call('settings.setModelRoles', next);
     }
     return saved;
   };
@@ -292,9 +303,10 @@ export function ProviderDialog({
                         const suggested = (p.suggestedModels ?? []).map((m) => ({
                           id: m.id,
                           label: m.label,
+                          purpose: isImageGenerationModel(m.id) ? ('image' as const) : ('chat' as const),
                         }));
                         setModels(suggested);
-                        setTestModel(suggested[0]?.id ?? '');
+                        setTestModel(suggested.find((m) => m.purpose !== 'image')?.id ?? suggested[0]?.id ?? '');
                       }}
                       className="rounded-xl border border-border px-3 py-2.5 text-left text-[13px] hover:bg-surface-hover"
                     >
@@ -408,7 +420,7 @@ export function ProviderDialog({
                     setNewModel('');
                   }
                 }}
-                placeholder="手动填写模型名称，如 deepseek-chat、qwen-plus"
+                placeholder="手动填写模型名称，如 MiniMax-M3、image-01"
                 className="font-mono text-[13px]"
               />
               <Button

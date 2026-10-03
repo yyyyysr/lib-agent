@@ -58,20 +58,26 @@ describe('createImageGenerator', () => {
     expect(Buffer.from(image.data).equals(png)).toBe(true);
   });
 
-  it('MiniMax 走原生 /image_generation 接口', async () => {
+  it('MiniMax 走原生 /image_generation（官方 url 格式）', async () => {
     const fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('cdn.example')) {
+        return new Response(jpeg, { headers: { 'content-type': 'image/jpeg' } });
+      }
       expect(String(url)).toBe('https://api.minimax.cn/v1/image_generation');
-      expect((init?.headers as Record<string, string>).authorization).toBe('Bearer sk-mm');
+      const headers = init?.headers as Record<string, string>;
+      expect(headers.Authorization ?? headers.authorization).toBe('Bearer sk-mm');
+      expect(headers['Content-Type'] ?? headers['content-type']).toBe('application/json');
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
       expect(body).toMatchObject({
         model: 'image-01',
         prompt: 'library poster art',
         aspect_ratio: '3:4',
-        response_format: 'base64',
+        response_format: 'url',
         n: 1,
+        prompt_optimizer: true,
       });
       return Response.json({
-        data: { image_base64: [jpeg.toString('base64')] },
+        data: { image_urls: ['https://cdn.example/a.jpg'] },
         base_resp: { status_code: 0, status_msg: 'success' },
       });
     });
@@ -81,20 +87,22 @@ describe('createImageGenerator', () => {
       fetch as unknown as typeof globalThis.fetch,
     );
     const image = await createImageGenerator(ctx, 'image-01', 'image')('library poster art');
-    expect(fetch).toHaveBeenCalledTimes(1);
     expect(image.mediaType).toBe('image/jpeg');
     expect(Buffer.from(image.data).equals(jpeg)).toBe(true);
   });
 
   it('自定义接口指向 MiniMax 域名时同样走原生生图', async () => {
-    const fetch = vi.fn(async () =>
-      Response.json({
-        data: { image_base64: [jpeg.toString('base64')] },
-        base_resp: { status_code: 0, status_msg: 'success' },
-      }),
-    );
+    const fetch = vi.fn(async (url: string) => {
+      if (String(url).includes('image_generation')) {
+        return Response.json({
+          data: { image_urls: ['https://cdn.example/a.jpg'] },
+          base_resp: { status_code: 0, status_msg: 'success' },
+        });
+      }
+      return new Response(jpeg, { headers: { 'content-type': 'image/jpeg' } });
+    });
     const ctx = resolveProvider(
-      config('custom', 'https://api.minimax.io/v1'),
+      config('custom', 'https://api.minimax.io/v1/image_generation'),
       'sk',
       fetch as unknown as typeof globalThis.fetch,
     );

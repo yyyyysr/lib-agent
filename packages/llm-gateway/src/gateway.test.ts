@@ -64,6 +64,14 @@ describe('resolveProvider', () => {
       resolveProvider(config('ollama', { baseURL: 'http://127.0.0.1:11434/v1/' }), null).baseURL,
     ).toBe('http://127.0.0.1:11434/v1');
   });
+  it('把 curl 完整生图地址规范成 /v1', () => {
+    expect(
+      resolveProvider(
+        config('minimax', { baseURL: 'https://api.minimax.cn/v1/image_generation' }),
+        'sk',
+      ).baseURL,
+    ).toBe('https://api.minimax.cn/v1');
+  });
   it('自定义接口必须填写地址', () => {
     expect(() => resolveProvider(config('custom'), 'k')).toThrow(/缺少接口地址/);
   });
@@ -111,7 +119,10 @@ describe('listRemoteModels', () => {
       'sk-x',
       fetch as unknown as typeof globalThis.fetch,
     );
-    expect(await listRemoteModels(ctx)).toEqual([{ id: 'deepseek-v3' }, { id: 'qwen-plus' }]);
+    expect(await listRemoteModels(ctx)).toEqual([
+      { id: 'deepseek-v3', purpose: 'chat' },
+      { id: 'qwen-plus', purpose: 'chat' },
+    ]);
     expect(fetch).toHaveBeenCalledWith(
       'https://dashscope.aliyuncs.com/compatible-mode/v1/models',
       expect.objectContaining({
@@ -129,6 +140,18 @@ describe('listRemoteModels', () => {
     );
     const error = await listRemoteModels(ctx).catch((e: unknown) => e);
     expect(mapProviderError(error).code).toBe('invalid_key');
+  });
+
+  it('MiniMax /models 不含生图模型时补上 image-01', async () => {
+    const fetch = vi.fn(async () => Response.json({ data: [{ id: 'MiniMax-M3' }] }));
+    const ctx = resolveProvider(
+      config('minimax'),
+      'sk',
+      fetch as unknown as typeof globalThis.fetch,
+    );
+    const list = await listRemoteModels(ctx);
+    expect(list.map((m) => m.id).sort()).toEqual(['MiniMax-M3', 'image-01', 'image-01-live'].sort());
+    expect(list.find((m) => m.id === 'image-01')?.purpose).toBe('image');
   });
 });
 

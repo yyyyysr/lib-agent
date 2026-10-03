@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { ModelCapabilities, ModelRef, ModelRoles } from '@yys/shared';
+import { isImageGenerationModel } from '@yys/shared';
 import { core, errorText } from '../../lib/core-client';
 import { useRpc } from '../../lib/use-rpc';
 import { toast } from '../../store/app-store';
@@ -9,6 +10,7 @@ export interface ModelOption extends ModelRef {
   label: string;
   hasKey: boolean;
   shared: boolean;
+  purpose?: 'chat' | 'image';
   capabilities?: ModelCapabilities;
 }
 
@@ -31,6 +33,7 @@ export function useModels() {
             label: m.label ?? m.id,
             hasKey: p.hasKey,
             shared: p.ownerId === null,
+            purpose: m.purpose ?? (isImageGenerationModel(m.id) ? 'image' : 'chat'),
             capabilities: m.capabilities,
           })),
         ),

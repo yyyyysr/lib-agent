@@ -36,10 +36,21 @@ export type ModelCapabilities = z.infer<typeof modelCapabilitiesSchema>;
 export const modelInfoSchema = z.object({
   id: z.string().min(1),
   label: z.string().optional(),
+  /** chat 走对话；image 走独立生图接口（如 MiniMax image-01） */
+  purpose: z.enum(['chat', 'image']).optional(),
   capabilities: modelCapabilitiesSchema.optional(),
   testedAt: z.string().optional(),
 });
 export type ModelInfo = z.infer<typeof modelInfoSchema>;
+
+export function isImageGenerationModel(modelId: string): boolean {
+  return /image-0|dall-?e|gpt-image|imagen|flux|kolors|seedream|stable-diffusion/i.test(modelId);
+}
+
+export function purposeForModel(modelId: string, fallback?: ModelInfo['purpose']): ModelInfo['purpose'] {
+  if (fallback) return fallback;
+  return isImageGenerationModel(modelId) ? 'image' : 'chat';
+}
 
 export const proxyConfigSchema = z.object({
   mode: z.enum(['system', 'manual', 'none']),
