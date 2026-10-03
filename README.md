@@ -12,6 +12,19 @@
 - **首页**：展示最近一期上线的书展、活动预告与成果。
 - **团队服务器**：多台电脑共用书展、审批与书库数据；HTTPS + 证书指纹固定，API Key 加密保存在服务器。
 
+## 下载
+
+在 [Releases](https://github.com/yyyyysr/lib-agent/releases/latest) 中下载最新版本：
+
+| 系统 | 安装包 |
+| --- | --- |
+| macOS（Apple 芯片 M1/M2/M3/M4） | `YiyeShuzhan-<版本>-mac-arm64.dmg` |
+| macOS（Intel 芯片） | `YiyeShuzhan-<版本>-mac-x64.dmg` |
+| Windows 10/11（x64，绝大多数电脑） | `YiyeShuzhan-<版本>-win-x64.exe` |
+| Windows（ARM，如 Surface Pro X） | `YiyeShuzhan-<版本>-win-arm64.exe` |
+
+安装包暂未做代码签名：macOS 首次打开会被拦截，在“系统设置 › 隐私与安全性”中点“仍要打开”（提示“已损坏”时在终端执行 `xattr -dr com.apple.quarantine /Applications/YiyeShuzhan.app`）；Windows 出现“Windows 已保护你的电脑”时点“更多信息 › 仍要运行”。
+
 ## 架构
 
 ```
@@ -23,7 +36,7 @@
                  ──WSS（固定证书）──► 团队服务器（Node.js）：同一套后台服务，SQLite 在服务器
 ```
 
-界面与后台服务之间是同一套 RPC 协议：单机模式经 MessagePort 直连本机后台服务；服务器模式由主进程把同样的消息转发到服务器的 WebSocket，界面代码不区分两种模式。详见 [技术架构方案](docs/一页书展Agent_技术架构方案.md)。
+界面与后台服务之间是同一套 RPC 协议：单机模式经 MessagePort 直连本机后台服务；服务器模式由主进程把同样的消息转发到服务器的 WebSocket，界面代码不区分两种模式。
 
 | 目录 | 内容 |
 | --- | --- |
