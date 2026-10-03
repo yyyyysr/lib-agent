@@ -47,8 +47,6 @@ const synonyms: Record<BookFieldKey, string[]> = {
     '主题',
     '关键词',
     '关键字',
-    '分类',
-    '中图分类',
     '标签',
     'subject',
     'subjects',
@@ -82,6 +80,24 @@ const synonyms: Record<BookFieldKey, string[]> = {
     'permalink',
   ],
   coverUrl: ['封面', '封面链接', '封面图', 'cover', 'coverurl', 'image'],
+  docType: ['文献类型', '资料类型', 'doctype'],
+  responsibility: ['所有责任者', '责任说明', '责任者说明', 'statementofresponsibility'],
+  otherTitles: [
+    '其他题名',
+    '所有题名',
+    '并列题名',
+    '并列正题名',
+    '原题名',
+    '原书名',
+    'originaltitle',
+  ],
+  pubPlace: ['出版发行地', '出版、发行地', '出版地', 'pubplace'],
+  keywords: ['主题标引', '标引词', '关键词（国图）'],
+  language: ['语种', '语言', 'language', 'lang'],
+  clcNumber: ['中图分类号', '中图分类', '分类号', '分类', 'clc', 'clcnumber'],
+  extent: ['载体形态', '页数', '页码', '形态描述', 'extent', 'pages'],
+  catalogSource: ['书目来源', '来源数据库', '编目机构', 'catalogsource'],
+  catalogUrl: ['书目记录', '书目链接', 'opac链接', 'opac', 'catalogurl'],
 };
 
 const normalize = (value: string): string =>

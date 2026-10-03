@@ -26,6 +26,16 @@ interface BookRow {
   summary: string | null;
   source_url: string | null;
   cover_url: string | null;
+  doc_type: string | null;
+  responsibility: string | null;
+  other_titles: string | null;
+  pub_place: string | null;
+  keywords: string | null;
+  language: string | null;
+  clc_number: string | null;
+  extent: string | null;
+  catalog_source: string | null;
+  catalog_url: string | null;
   is_sample: number;
   provenance: string;
   created_at: string;
@@ -50,6 +60,16 @@ const toRecord = (row: BookRow): BookRecord => ({
   summary: opt(row.summary),
   sourceUrl: opt(row.source_url),
   coverUrl: opt(row.cover_url),
+  docType: opt(row.doc_type),
+  responsibility: opt(row.responsibility),
+  otherTitles: opt(row.other_titles),
+  pubPlace: opt(row.pub_place),
+  keywords: row.keywords ? fromJson<string[]>(row.keywords, []) : undefined,
+  language: opt(row.language),
+  clcNumber: opt(row.clc_number),
+  extent: opt(row.extent),
+  catalogSource: opt(row.catalog_source),
+  catalogUrl: opt(row.catalog_url),
   isSample: row.is_sample === 1,
   provenance: fromJson(row.provenance, {}),
   createdAt: row.created_at,
@@ -130,13 +150,18 @@ export class BookRepo {
     const at = nowIso();
     const stmt = this.db.raw.prepare(
       `INSERT INTO books(id, source_id, external_id, title, authors, publisher, pub_year, isbn, call_number, location,
-         availability, subjects, summary, source_url, cover_url, is_sample, provenance, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         availability, subjects, summary, source_url, cover_url, doc_type, responsibility, other_titles, pub_place,
+         keywords, language, clc_number, extent, catalog_source, catalog_url, is_sample, provenance, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(source_id, external_id) DO UPDATE SET
          title = excluded.title, authors = excluded.authors, publisher = excluded.publisher, pub_year = excluded.pub_year,
          isbn = excluded.isbn, call_number = excluded.call_number, location = excluded.location,
          availability = excluded.availability, subjects = excluded.subjects, summary = excluded.summary,
-         source_url = excluded.source_url, cover_url = excluded.cover_url, is_sample = excluded.is_sample,
+         source_url = excluded.source_url, cover_url = excluded.cover_url, doc_type = excluded.doc_type,
+         responsibility = excluded.responsibility, other_titles = excluded.other_titles, pub_place = excluded.pub_place,
+         keywords = excluded.keywords, language = excluded.language, clc_number = excluded.clc_number,
+         extent = excluded.extent, catalog_source = excluded.catalog_source, catalog_url = excluded.catalog_url,
+         is_sample = excluded.is_sample,
          provenance = excluded.provenance, updated_at = excluded.updated_at`,
     );
     return this.db.transaction(() => {
@@ -157,6 +182,16 @@ export class BookRepo {
           d.summary ?? null,
           d.sourceUrl ?? null,
           d.coverUrl ?? null,
+          d.docType ?? null,
+          d.responsibility ?? null,
+          d.otherTitles ?? null,
+          d.pubPlace ?? null,
+          d.keywords ? toJson(d.keywords) : null,
+          d.language ?? null,
+          d.clcNumber ?? null,
+          d.extent ?? null,
+          d.catalogSource ?? null,
+          d.catalogUrl ?? null,
           d.isSample ? 1 : 0,
           toJson(d.provenance),
           at,
@@ -186,15 +221,21 @@ export class BookRepo {
     const params: Params = [];
     const terms = (query.text ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 8);
     for (const term of terms) {
+      const like = `%${escapeLike(term)}%`;
+      const isbnLike = `%${escapeLike(term.replaceAll('-', ''))}%`;
+      // 著录字段不在全文索引中，按 ISBN（忽略连字符）、索书号、中图分类号、关键词单独匹配
+      const catalog =
+        "REPLACE(b.isbn, '-', '') LIKE ? ESCAPE '\\' OR b.call_number LIKE ? ESCAPE '\\' OR b.clc_number LIKE ? ESCAPE '\\' OR b.keywords LIKE ? ESCAPE '\\'";
       if ([...term].length >= 3) {
-        where.push('b.rowid IN (SELECT rowid FROM books_fts WHERE books_fts MATCH ?)');
-        params.push(ftsPhrase(term));
-      } else {
-        const like = `%${escapeLike(term)}%`;
         where.push(
-          "(b.title LIKE ? ESCAPE '\\' OR b.authors LIKE ? ESCAPE '\\' OR b.subjects LIKE ? ESCAPE '\\' OR b.summary LIKE ? ESCAPE '\\')",
+          `(b.rowid IN (SELECT rowid FROM books_fts WHERE books_fts MATCH ?) OR ${catalog})`,
         );
-        params.push(like, like, like, like);
+        params.push(ftsPhrase(term), isbnLike, like, like, like);
+      } else {
+        where.push(
+          `(b.title LIKE ? ESCAPE '\\' OR b.authors LIKE ? ESCAPE '\\' OR b.subjects LIKE ? ESCAPE '\\' OR b.summary LIKE ? ESCAPE '\\' OR ${catalog})`,
+        );
+        params.push(like, like, like, like, isbnLike, like, like, like);
       }
     }
     if (query.sourceIds?.length) {

@@ -154,12 +154,20 @@ function BookRow({
             {book.isSample && <Badge>示例</Badge>}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted">
-            {book.authors.join('、') || '作者待核对'}
-            {book.summary ? ` · ${book.summary}` : ''}
+            {[book.authors.join('、') || '作者待核对', book.publisher, book.pubYear]
+              .filter(Boolean)
+              .join(' · ')}
           </p>
         </div>
-        <span className="hidden w-28 shrink-0 truncate text-[13px] text-muted lg:block">
-          {book.callNumber ?? '—'}
+        <span className="hidden w-32 shrink-0 truncate text-[13px] text-muted lg:block">
+          {book.callNumber ??
+            (book.clcNumber ? (
+              <Tooltip content="尚无索书号，显示中图分类号">
+                <span>{book.clcNumber}</span>
+              </Tooltip>
+            ) : (
+              '—'
+            ))}
         </span>
         <span className="hidden w-36 shrink-0 truncate text-[13px] text-muted xl:block">
           {book.subjects?.slice(0, 3).join('、') || '—'}
@@ -311,7 +319,7 @@ export function LibraryView() {
               <Input
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="按书名、作者、主题词、摘要检索"
+                placeholder="按书名、作者、ISBN、索书号、主题词检索"
                 className="pl-9"
               />
             </div>

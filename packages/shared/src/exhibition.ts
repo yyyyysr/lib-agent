@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { bookRecordSchema } from './book';
 
 /* ───────────── 状态机 ───────────── */
 
@@ -94,18 +95,31 @@ export type Brief = z.infer<typeof briefSchema>;
 /* ───────────── 策展方案 ───────────── */
 
 /** 入选时的书目快照：之后书库变动不影响已提交的方案，也便于追溯 */
-export const bookSnapshotSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  authors: z.array(z.string()),
-  callNumber: z.string().optional(),
-  sourceUrl: z.string().optional(),
-  subjects: z.array(z.string()).default([]),
-  summary: z.string().optional(),
-  isbn: z.string().optional(),
-  coverUrl: z.string().optional(),
-  isSample: z.boolean(),
-});
+export const bookSnapshotSchema = bookRecordSchema
+  .pick({
+    id: true,
+    title: true,
+    authors: true,
+    publisher: true,
+    pubYear: true,
+    callNumber: true,
+    sourceUrl: true,
+    summary: true,
+    isbn: true,
+    coverUrl: true,
+    docType: true,
+    responsibility: true,
+    otherTitles: true,
+    pubPlace: true,
+    keywords: true,
+    language: true,
+    clcNumber: true,
+    extent: true,
+    catalogSource: true,
+    catalogUrl: true,
+    isSample: true,
+  })
+  .extend({ title: z.string(), subjects: z.array(z.string()).default([]) });
 export type BookSnapshot = z.infer<typeof bookSnapshotSchema>;
 
 export const evidenceFieldSchema = z.enum(['title', 'subjects', 'summary']);

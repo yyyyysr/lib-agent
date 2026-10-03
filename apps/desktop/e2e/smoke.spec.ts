@@ -161,15 +161,33 @@ test('书库：实体书封面，点击条目展开详情，示例书链接可�
     page.getByRole('button', { name: 'https://book.douban.com/subject/10785583/' }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: '打开来源页面' })).toBeVisible();
+  // 国图书目记录的著录字段
+  await expect(page.getByRole('button', { name: '查看书目记录' })).toBeVisible();
+  await expect(page.getByText('ISBN：978-7-5086-3355-8')).toBeVisible();
+  await expect(page.getByText('中图分类：F069.9-49')).toBeVisible();
+  await expect(page.getByText('24,424页')).toBeVisible();
+  // 实体书封面随应用附带，离线也能加载
+  const cover = page.getByAltText('《思考，快与慢》封面').last();
+  await expect(cover).toBeVisible();
+  await expect
+    .poll(() => cover.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(100);
   await shot('03-library-detail');
+  // 按 ISBN（含或不含连字符）检索
+  await page.getByPlaceholder(/按书名/).fill('9787508633558');
+  await expect(page.getByText('共 1 本')).toBeVisible();
+  await page.getByPlaceholder(/按书名/).fill('');
+  await expect(page.getByText('共 28 本')).toBeVisible();
   await page.getByRole('button', { name: '书架' }).click();
-  await expect(page.getByRole('img', { name: '《乡土中国》' })).toBeVisible();
+  await expect(page.getByAltText('《乡土中国》封面')).toBeVisible();
   await shot('03-library-shelf');
   await page
-    .getByRole('button', { name: /乡土中国/ })
+    .getByRole('button', { name: /思考，快与慢/ })
     .first()
     .click();
   await expect(dialog().getByRole('heading', { name: '书目详情' })).toBeVisible();
+  await expect(dialog().getByText('中国国家图书馆 · 馆藏中文资源')).toBeVisible();
+  await shot('03-library-dialog');
   await dialog().getByRole('button', { name: '关闭' }).click();
   await expect(dialog()).toHaveCount(0);
   await page.getByRole('button', { name: '列表' }).click();
@@ -269,7 +287,12 @@ test('审批人：同意上线，首页更新为最新一期', async () => {
   await page.getByRole('img', { name: /^海报：/ }).hover({ position: { x: 60, y: 60 } });
   await settled();
   await shot('08-home-published');
-  await page.getByRole('button', { name: '查看《AI 3.0》', exact: true }).click();
+  await page
+    .getByRole('button', {
+      name: '查看《智能革命：迎接人工智能时代的社会、经济与文化变革》',
+      exact: true,
+    })
+    .click();
   await expect(dialog().getByText('本期导读')).toBeVisible();
   await settled();
   await shot('08-home-book-detail');

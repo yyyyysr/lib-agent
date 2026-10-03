@@ -172,4 +172,18 @@ export const migrations: string[] = [
   ALTER TABLE users ADD COLUMN builtin INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;
   `,
+
+  /* sql */ `
+  -- 著录字段（文献类型、责任说明、出版地、关键词、语种、中图分类号、载体形态、书目来源与记录链接）
+  ALTER TABLE books ADD COLUMN doc_type TEXT;
+  ALTER TABLE books ADD COLUMN responsibility TEXT;
+  ALTER TABLE books ADD COLUMN other_titles TEXT;
+  ALTER TABLE books ADD COLUMN pub_place TEXT;
+  ALTER TABLE books ADD COLUMN keywords TEXT;
+  ALTER TABLE books ADD COLUMN language TEXT;
+  ALTER TABLE books ADD COLUMN clc_number TEXT;
+  ALTER TABLE books ADD COLUMN extent TEXT;
+  ALTER TABLE books ADD COLUMN catalog_source TEXT;
+  ALTER TABLE books ADD COLUMN catalog_url TEXT;
+  `,
 ];

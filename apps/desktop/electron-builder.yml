@@ -10,6 +10,9 @@ files:
   - package.json
   - '!**/*.map'
 asar: true
+extraResources:
+  - from: resources/covers
+    to: covers
 # 所有依赖都是 devDependencies 且已由 electron-vite 打包进 out/，安装包不携带 node_modules，也无原生模块需要重编译
 npmRebuild: false
 electronFuses:

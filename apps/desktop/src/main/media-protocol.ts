@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { net, protocol } from 'electron';
 import log from 'electron-log/main';
 import { MEDIA_SCHEME, mediaIdPattern } from '@yys/shared/ipc';
+import { sniffImageType } from './image-type';
 
 const MEDIA_TYPES: Record<string, string> = {
   png: 'image/png',
@@ -32,7 +33,10 @@ const imageResponse = (data: Buffer, type: string): Response =>
     headers: { 'content-type': type, 'cache-control': 'max-age=31536000, immutable' },
   });
 
-export function handleMediaProtocol(dataDir: string): void {
+/** 封面地址的缓存键；随应用附带的封面（bundledCoverDir）也以此命名 */
+export const coverKey = (source: string): string => createHash('sha1').update(source).digest('hex');
+
+export function handleMediaProtocol(dataDir: string, bundledCoverDir?: string): void {
   const mediaDir = join(dataDir, 'media');
   const coverDir = join(dataDir, 'covers');
   mkdirSync(coverDir, { recursive: true });
@@ -54,16 +58,24 @@ export function handleMediaProtocol(dataDir: string): void {
     const failFile = join(coverDir, `${key}.fail`);
     if (existsSync(dataFile) && existsSync(typeFile))
       return imageResponse(await readFile(dataFile), (await readFile(typeFile, 'utf8')).trim());
+    if (bundledCoverDir) {
+      for (const [ext, type] of Object.entries(MEDIA_TYPES)) {
+        const file = join(bundledCoverDir, `${key}.${ext}`);
+        if (existsSync(file)) return imageResponse(await readFile(file), type);
+      }
+    }
     if (existsSync(failFile) && Date.now() - statSync(failFile).mtimeMs < FAILURE_TTL_MS)
       return notFound();
     try {
       const response = await net.fetch(source, { signal: AbortSignal.timeout(COVER_TIMEOUT_MS) });
-      const type = response.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
-      if (!response.ok || !type.startsWith('image/'))
-        throw new Error(`HTTP ${response.status} ${type}`);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const declared = Number(response.headers.get('content-length') ?? 0);
+      if (declared > MAX_COVER_BYTES) throw new Error(`封面过大：${declared}`);
       const data = Buffer.from(await response.arrayBuffer());
       if (data.length === 0 || data.length > MAX_COVER_BYTES)
         throw new Error(`封面大小异常：${data.length}`);
+      const type = sniffImageType(data);
+      if (!type) throw new Error(`不是图片：${response.headers.get('content-type') ?? '未知类型'}`);
       await writeFile(dataFile, data);
       await writeFile(typeFile, type);
       return imageResponse(data, type);
@@ -76,7 +88,7 @@ export function handleMediaProtocol(dataDir: string): void {
 
   async function serveCover(source: string | null): Promise<Response> {
     if (!source || source.length > 2048 || !/^https?:\/\//i.test(source)) return notFound();
-    const key = createHash('sha1').update(source).digest('hex');
+    const key = coverKey(source);
     let pending = inflight.get(key);
     if (!pending) {
       pending = fetchCover(source, key).finally(() => inflight.delete(key));

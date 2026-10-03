@@ -116,15 +116,30 @@ export function normalizeRows(
     if (isbn.isbn) draft.isbn = isbn.isbn;
     if (!isbn.valid) pushIssue(rowNo, `ISBN 位数不正确：${get('isbn')}`);
 
-    for (const field of ['callNumber', 'location', 'availability', 'summary'] as const) {
+    for (const field of [
+      'callNumber',
+      'location',
+      'availability',
+      'summary',
+      'docType',
+      'responsibility',
+      'otherTitles',
+      'pubPlace',
+      'language',
+      'clcNumber',
+      'extent',
+      'catalogSource',
+    ] as const) {
       const value = get(field);
       if (value) draft[field] = value;
     }
 
     const subjects = splitList(get('subjects'));
     if (subjects.length) draft.subjects = subjects;
+    const keywords = splitList(get('keywords'));
+    if (keywords.length) draft.keywords = keywords;
 
-    for (const field of ['sourceUrl', 'coverUrl'] as const) {
+    for (const field of ['sourceUrl', 'coverUrl', 'catalogUrl'] as const) {
       const value = get(field);
       if (!value) continue;
       const url = cleanUrl(value);

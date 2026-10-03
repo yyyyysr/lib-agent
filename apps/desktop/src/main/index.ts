@@ -38,7 +38,11 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(() => {
     log.info(`[app] 启动 ${app.getVersion()} on ${process.platform}-${process.arch}`);
-    handleMediaProtocol(dataDir);
+    // 示例书库的封面随应用附带，离线也能显示
+    const bundledCovers = app.isPackaged
+      ? join(process.resourcesPath, 'covers')
+      : join(import.meta.dirname, '../../resources/covers');
+    handleMediaProtocol(dataDir, bundledCovers);
     const vault = new SecretVault(dataDir);
     core = new CoreHost({ dataDir, appVersion: app.getVersion(), vault });
     registerIpc({ core, vault, dataDir });

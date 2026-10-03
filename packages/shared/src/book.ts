@@ -13,6 +13,17 @@ export const bookFieldKeys = [
   'summary',
   'sourceUrl',
   'coverUrl',
+  // 著录字段：与国家图书馆“文津”书目详情一致，来自图书馆书目记录
+  'docType',
+  'responsibility',
+  'otherTitles',
+  'pubPlace',
+  'keywords',
+  'language',
+  'clcNumber',
+  'extent',
+  'catalogSource',
+  'catalogUrl',
 ] as const;
 export type BookFieldKey = (typeof bookFieldKeys)[number];
 
@@ -29,6 +40,16 @@ export const bookFieldLabels: Record<BookFieldKey, string> = {
   summary: '摘要',
   sourceUrl: '来源链接',
   coverUrl: '封面',
+  docType: '文献类型',
+  responsibility: '所有责任者',
+  otherTitles: '其他题名',
+  pubPlace: '出版发行地',
+  keywords: '关键词',
+  language: '语种',
+  clcNumber: '中图分类号',
+  extent: '载体形态',
+  catalogSource: '书目来源',
+  catalogUrl: '书目记录',
 };
 
 /** 缺失即不能入选书单 */
@@ -63,6 +84,22 @@ export const bookRecordSchema = z.object({
   summary: z.string().optional(),
   sourceUrl: z.string().optional(),
   coverUrl: z.string().optional(),
+  docType: z.string().optional(),
+  /** 题名页上的完整责任说明，含译者等，如“(美)丹尼尔·卡尼曼著 胡晓姣 李爱民 何梦莹译” */
+  responsibility: z.string().optional(),
+  /** 并列题名、原题名等 */
+  otherTitles: z.string().optional(),
+  pubPlace: z.string().optional(),
+  /** 编目时标引的关键词（主题标引），如“行为经济学---普及读物” */
+  keywords: z.array(z.string()).optional(),
+  language: z.string().optional(),
+  clcNumber: z.string().optional(),
+  /** 页数、尺寸等，如“24,424页” */
+  extent: z.string().optional(),
+  /** 编目机构与数据库，如“中国国家图书馆 · 馆藏中文资源” */
+  catalogSource: z.string().optional(),
+  /** 书目记录的公开页面 */
+  catalogUrl: z.string().optional(),
   isSample: z.boolean(),
   provenance: z.partialRecord(z.enum(bookFieldKeys), fieldProvenanceSchema),
   createdAt: z.string(),

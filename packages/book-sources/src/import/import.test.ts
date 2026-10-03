@@ -40,6 +40,39 @@ describe('suggestMapping', () => {
     expect(mapping.summary).toBe('作者简介');
   });
 
+  it('识别著录字段表头（与国图书目详情一致）', () => {
+    const { mapping, unmappedHeaders } = suggestMapping([
+      '题名',
+      '责任者',
+      '所有责任者',
+      '并列题名',
+      '文献类型',
+      '出版、发行地',
+      '主题词',
+      '关键词',
+      '语种',
+      '中图分类号',
+      '载体形态',
+      '来源数据库',
+    ]);
+    expect(mapping).toMatchObject({
+      title: '题名',
+      authors: '责任者',
+      responsibility: '所有责任者',
+      otherTitles: '并列题名',
+      docType: '文献类型',
+      pubPlace: '出版、发行地',
+      subjects: '主题词',
+      language: '语种',
+      clcNumber: '中图分类号',
+      extent: '载体形态',
+      catalogSource: '来源数据库',
+    });
+    // 只有一列“关键词”时归入主题词；已有主题词列时不再重复映射
+    expect(unmappedHeaders).toEqual(['关键词']);
+    expect(suggestMapping(['题名', '关键词']).mapping.subjects).toBe('关键词');
+  });
+
   it('识别英文表头', () => {
     const { mapping } = suggestMapping(['Title', 'Author', 'Call Number', 'URL']);
     expect(mapping).toMatchObject({

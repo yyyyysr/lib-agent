@@ -112,6 +112,38 @@ describe('db', () => {
       expect(repos.books.search({}).total).toBe(3);
     });
 
+    it('著录字段读写完整，可按 ISBN（忽略连字符）、中图分类号、关键词检索', () => {
+      repos.books.insertDrafts(sourceId, [
+        draft('思考，快与慢', {
+          authors: ['丹尼尔·卡尼曼'],
+          externalId: 'b',
+          isbn: '978-7-5086-3355-8',
+          docType: '专著',
+          responsibility: '(美)丹尼尔·卡尼曼著 胡晓姣 李爱民 何梦莹译',
+          otherTitles: '并列正题名：Thinking, fast and slow',
+          pubPlace: '北京',
+          keywords: ['行为经济学---普及读物'],
+          language: '汉语、英语',
+          clcNumber: 'F069.9-49',
+          extent: '24,424页',
+          catalogSource: '中国国家图书馆 · 馆藏中文资源',
+          catalogUrl: 'http://find.nlc.cn/search/showDocDetails?docId=1&dataSource=ucs01&query=',
+        }),
+      ]);
+      const [book] = repos.books.search({ text: '9787508633558' }).items;
+      expect(book).toMatchObject({
+        title: '思考，快与慢',
+        docType: '专著',
+        pubPlace: '北京',
+        keywords: ['行为经济学---普及读物'],
+        clcNumber: 'F069.9-49',
+        extent: '24,424页',
+      });
+      expect(repos.books.search({ text: '978-7-5086-3355-8' }).total).toBe(1);
+      expect(repos.books.search({ text: 'F069.9' }).total).toBe(1);
+      expect(repos.books.search({ text: '行为经济学' }).total).toBe(1);
+    });
+
     it('特殊字符不会破坏查询', () => {
       expect(() => repos.books.search({ text: '"%_\\ OR *' })).not.toThrow();
     });
