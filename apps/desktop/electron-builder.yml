@@ -53,6 +53,3 @@ nsis:
 linux:
   target: [AppImage]
   category: Education
-
-publish:
-  provider: github

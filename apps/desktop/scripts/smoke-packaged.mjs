@@ -1,19 +1,22 @@
 // 启动打包后的应用，确认主进程与后台服务都能正常启动（数据库与示例书库初始化完成）。
 // 开发模式下的测试无法覆盖打包产物特有的问题，例如 fuse 与签名、asar 路径、环境变量传递。
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const release = join(import.meta.dirname, '..', 'release');
-const version = readdirSync(release).find((name) => /^\d/.test(name));
-if (!version) throw new Error('release 目录中没有打包产物');
-const root = join(release, version);
+const { version } = JSON.parse(
+  readFileSync(join(import.meta.dirname, '..', 'package.json'), 'utf8'),
+);
+const root = join(import.meta.dirname, '..', 'release', version);
+if (!existsSync(root)) throw new Error(`没有 ${version} 版本的打包产物：${root}`);
 
 const candidates = {
-  darwin: readdirSync(root)
-    .filter((d) => d.startsWith('mac'))
-    .map((d) => join(root, d, 'YiyeShuzhan.app', 'Contents', 'MacOS', 'YiyeShuzhan')),
+  // 只能启动与本机 CPU 相符的产物（未装 Rosetta 的 Apple Silicon 无法运行 x64 版）
+  darwin: (process.arch === 'arm64'
+    ? ['mac-arm64', 'mac-universal']
+    : ['mac', 'mac-universal']
+  ).map((d) => join(root, d, 'YiyeShuzhan.app', 'Contents', 'MacOS', 'YiyeShuzhan')),
   win32: [
     join(root, 'win-unpacked', 'YiyeShuzhan.exe'),
     join(root, 'win-arm64-unpacked', 'YiyeShuzhan.exe'),
