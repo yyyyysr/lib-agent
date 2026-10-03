@@ -99,7 +99,10 @@ describe('createImageGenerator', () => {
       fetch as unknown as typeof globalThis.fetch,
     );
     await createImageGenerator(ctx, 'image-01', 'image')('x');
-    expect(String(fetch.mock.calls[0]![0])).toBe('https://api.minimax.io/v1/image_generation');
+    expect(fetch).toHaveBeenCalledWith(
+      'https://api.minimax.io/v1/image_generation',
+      expect.anything(),
+    );
   });
 
   it('MiniMax 业务错误码映射为可读错误', async () => {

@@ -9,6 +9,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import type { ConnectionTestResult, ModelInfo, ProviderConfig, ProviderPreset } from '@yys/shared';
+import { mergeProviderPresets } from '@yys/shared';
 import { Badge, Button, Dialog, Field, Input } from '../../components/ui';
 import { cn } from '../../lib/cn';
 import { core, errorText } from '../../lib/core-client';
@@ -94,7 +95,8 @@ export function ProviderDialog({
   onOpenChange: (open: boolean) => void;
   editing?: ProviderConfig;
 }) {
-  const { data: presets = [] } = useRpc('providers.presets', undefined);
+  const { data: remotePresets } = useRpc('providers.presets', undefined);
+  const presets = mergeProviderPresets(remotePresets);
   const [presetId, setPresetId] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [baseURL, setBaseURL] = useState('');
@@ -286,12 +288,21 @@ export function ProviderDialog({
                       onClick={() => {
                         setPresetId(p.id);
                         setDisplayName(p.name);
+                        setBaseURL(p.defaultBaseURL ?? '');
+                        const suggested = (p.suggestedModels ?? []).map((m) => ({
+                          id: m.id,
+                          label: m.label,
+                        }));
+                        setModels(suggested);
+                        setTestModel(suggested[0]?.id ?? '');
                       }}
                       className="rounded-xl border border-border px-3 py-2.5 text-left text-[13px] hover:bg-surface-hover"
                     >
                       {p.name}
-                      {!p.requiresKey && (
-                        <span className="mt-0.5 block text-[11px] text-subtle">无需 API Key</span>
+                      {(p.blurb || !p.requiresKey) && (
+                        <span className="mt-0.5 block text-[11px] text-subtle">
+                          {p.blurb ?? '无需 API Key'}
+                        </span>
                       )}
                     </button>
                   ))}

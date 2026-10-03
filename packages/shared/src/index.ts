@@ -2,6 +2,7 @@ export * from './book';
 export * from './errors';
 export * from './exhibition';
 export * from './ipc';
+export * from './presets';
 export * from './provider';
 export * from './rpc';
 export * from './school';

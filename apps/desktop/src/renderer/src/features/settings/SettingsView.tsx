@@ -25,6 +25,7 @@ import {
   type ThemeSource,
   type ImageTestResult,
 } from '@yys/shared';
+import { mergeProviderPresets } from '@yys/shared';
 import { mediaUrl } from '@yys/shared/ipc';
 import { TopBar } from '../../app/TopBar';
 import {
@@ -129,6 +130,8 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
   const [result, setResult] = useState<ImageTestResult | null>(null);
   const key = (o: ModelOption): string => `${o.providerId}::${o.modelId}`;
   const mode = image?.mode ?? 'image';
+  const imageLike = (modelId: string): boolean =>
+    /image-0|imagen|dall-?e|flux|kolors|seedream|gpt-image/i.test(modelId);
 
   const test = async (): Promise<void> => {
     if (!image) return;
@@ -155,8 +158,8 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
           <p className="mt-0.5 text-xs leading-relaxed text-muted">
             用于 AI 绘制海报画面。可选专门的生图接口（如 gpt-image-1、Imagen、豆包
             Seedream、MiniMax image-01、硅基流动 Kolors/FLUX），或能输出图片的多模态模型（如
-            gemini-2.5-flash-image）。先在上方服务商中添加对应的模型名称（MiniMax
-            请添加 image-01，接入方式选「生图接口」）。
+            gemini-2.5-flash-image）。请先点上方「添加服务商」：国内服务商里有「MiniMax
+            海螺」，会预填对话模型 MiniMax-M3 与生图模型 image-01。
             {isAdmin && ' 配置在“全员共享”服务商上的生图模型，其他用户未配置时也能使用。'}
           </p>
         </div>
@@ -170,7 +173,11 @@ function ImageModelPanel({ options }: { options: ModelOption[] }) {
               setResult(null);
               void setRoles({
                 image: option
-                  ? { providerId: option.providerId, modelId: option.modelId, mode }
+                  ? {
+                      providerId: option.providerId,
+                      modelId: option.modelId,
+                      mode: imageLike(option.modelId) ? 'image' : mode,
+                    }
                   : null,
               });
             }}
@@ -240,7 +247,8 @@ function ModelsSection() {
   });
   const { options, roles, setRoles } = useModels();
   const isAdmin = useRole('superadmin');
-  const { data: presets = [] } = useRpc('providers.presets', undefined);
+  const { data: remotePresets } = useRpc('providers.presets', undefined);
+  const presets = mergeProviderPresets(remotePresets);
   const [dialog, setDialog] = useState<{ open: boolean; editing?: ProviderConfig }>({
     open: false,
   });
@@ -281,7 +289,7 @@ function ModelsSection() {
             <EmptyState
               icon={<KeyRound className="size-7" />}
               title="还没有配置模型"
-              description="支持 DeepSeek、通义千问、Kimi、智谱、豆包、OpenAI、Claude、Gemini、OpenRouter，以及 Ollama 等本地模型和任意 OpenAI 兼容接口。"
+              description="支持 MiniMax 海螺（对话 + 生图 image-01）、DeepSeek、通义千问、Kimi、智谱、豆包、OpenAI、Claude、Gemini、OpenRouter，以及 Ollama 等本地模型和任意 OpenAI 兼容接口。"
               action={
                 <Button variant="primary" onClick={() => setDialog({ open: true })}>
                   添加第一个服务商

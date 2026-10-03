@@ -47,6 +47,7 @@ const config = (presetId: string, extra: Partial<ProviderConfig> = {}): Provider
 
 describe('presets', () => {
   it('id 唯一，需要 Key 的预设都有默认地址', () => {
+    expect(providerPresets.some((p) => p.id === 'minimax' && p.name.includes('海螺'))).toBe(true);
     expect(new Set(providerPresets.map((p) => p.id)).size).toBe(providerPresets.length);
     for (const preset of providerPresets) {
       if (preset.id !== 'custom') expect(preset.defaultBaseURL, preset.id).toMatch(/^https?:\/\//);

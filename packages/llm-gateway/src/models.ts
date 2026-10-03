@@ -68,7 +68,7 @@ export function createLanguageModel(ctx: ProviderContext, modelId: string): Lang
 }
 
 const nonChatModel =
-  /embed|whisper|tts|dall-?e|moderation|rerank|image|audio|speech|transcri|vision-preview|ocr/i;
+  /embed|whisper|tts|dall-?e|moderation|rerank|audio|speech|transcri|vision-preview|ocr/i;
 
 async function getJson(
   ctx: ProviderContext,

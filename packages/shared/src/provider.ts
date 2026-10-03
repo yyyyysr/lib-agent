@@ -21,6 +21,10 @@ export interface ProviderPreset {
   /** 是否允许用户修改 baseURL */
   editableBaseURL: boolean;
   group: 'international' | 'domestic' | 'aggregator' | 'local' | 'custom';
+  /** 选择服务商时预填的常用模型（可再增删） */
+  suggestedModels?: { id: string; label?: string }[];
+  /** 添加页卡片上的一行说明 */
+  blurb?: string;
 }
 
 export const modelCapabilitiesSchema = z.object({
