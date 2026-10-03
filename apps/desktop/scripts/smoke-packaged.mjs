@@ -42,9 +42,16 @@ while (Date.now() < deadline) {
     break;
   }
 }
+const exited = new Promise((resolve) => child.once('exit', resolve));
 child.kill();
+await Promise.race([exited, new Promise((r) => setTimeout(r, 10_000))]);
 const output = existsSync(log) ? readFileSync(log, 'utf8') : '（没有日志）';
-rmSync(dataDir, { recursive: true, force: true });
+try {
+  // Windows 上后台进程退出后才释放数据库文件，删除可能需要重试
+  rmSync(dataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 });
+} catch {
+  console.warn(`临时数据目录未能删除（不影响检查结果）：${dataDir}`);
+}
 if (!ok) {
   console.error(output);
   throw new Error('打包后的应用未能在 30 秒内完成启动');
